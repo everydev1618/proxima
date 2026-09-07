@@ -1,56 +1,37 @@
-# Welcome to your Expo app 👋
+# Proxima mobile
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+The phone app for [proxima](../README.md): pair by scanning the QR the
+terminal prints, and everything after that — first-run model download, chat
+with Iris, tool approvals — happens on the phone.
 
-## Get started
-
-1. Install dependencies
-
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```
+cd mobile
+npm install
+npx expo start
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Scan the Metro QR with Expo Go (iOS/Android) on a phone on the same network
+as the Mac running `proxima`. In the app, scan the *pairing* QR from the
+proxima terminal (or enter host/port/token manually — the terminal prints
+those too).
 
-### Other setup steps
+## How it talks to the Mac
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+- `proxima` listens on `0.0.0.0:7769` by default (`-mobile=off` to disable);
+  every non-loopback request needs the pairing token from
+  `~/.vega/mobile-token`, sent as a bearer header or `?token=`.
+- Onboarding drives `/api/v1/local/state` + `/api/v1/local/bootstrap` and
+  streams download progress from `/api/v1/local/progress` (SSE).
+- Chat streams from `POST /api/v1/agents/iris/chat/stream` (SSE:
+  `text_delta`, `tool_start`, `tool_end`, `done`).
+- Tool approvals arrive on `/api/v1/local/approvals/stream` and resolve via
+  `POST /api/v1/local/approvals/{id}` — racing the terminal prompt.
 
-## Learn more
+## Layout
 
-To learn more about developing your project with Expo, look at the following resources:
+- `src/app/` — screens (expo-router): gate → pair → onboarding → chat → status
+- `src/lib/` — theme tokens, pairing persistence, typed API client
+- `src/components/` — `Star` (the signature orb: dim/idle/forming/thinking),
+  approval sheet, themed markdown, quiet UI atoms
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Checks: `npx tsc --noEmit` and `npm run lint`.

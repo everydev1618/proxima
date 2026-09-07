@@ -48,7 +48,16 @@ with crash restarts and idle VRAM reclamation.
 
 Flags: `-base-url` to point at a specific server (tailnet boxes count as
 local), `-model` to override the model, `-managed` to skip external-server
-detection, `-addr`, `-db`.
+detection, `-addr`, `-db`, `-mobile=off` to disable phone pairing.
+
+## Phone
+
+`proxima` prints a pairing QR at startup: scan it with the Proxima mobile app
+(`mobile/`, Expo/React Native) and the phone takes over — including the
+first-run model download, streamed chat with Iris, and tool approvals. The
+LAN listener (port 7769) is gated by a per-machine token
+(`~/.vega/mobile-token`); loopback stays open so the desktop dashboard is
+unchanged. See `mobile/README.md`.
 
 proxima is a downstream product of [govega](https://github.com/everydev1618/govega)
 in the v39a-vega mold: the binary is wiring, the framework is upstream. See
