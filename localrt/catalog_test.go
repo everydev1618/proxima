@@ -64,6 +64,56 @@ func TestSelectVariant(t *testing.T) {
 	}
 }
 
+func TestStarterEntry(t *testing.T) {
+	starter := testEntry("small", 3, 40, 1.0)
+	starter.Starter = true
+	big := testEntry("big", 16, 90, 1.0)
+	budget := HardwareBudget{UsableVRAMBytes: 48 * gib, RAMAvailableBytes: 32 * gib}
+
+	// The starter wins even when a higher-quality model also fits.
+	e, c := StarterEntry([]*CatalogEntry{big, starter}, budget)
+	if e == nil || e.ID != "small" || c == nil || !c.ZeroSpill {
+		t.Fatalf("starter pick: %+v %+v", e, c)
+	}
+
+	// No starter in the set: nil.
+	if e, _ := StarterEntry([]*CatalogEntry{big}, budget); e != nil {
+		t.Fatalf("non-starter picked: %+v", e)
+	}
+
+	// A starter that would run spilled is no starter — the first chat must
+	// be pleasant, not a RAM-streaming crawl.
+	spilly := HardwareBudget{UsableVRAMBytes: 2 * gib, RAMAvailableBytes: 32 * gib}
+	if e, _ := StarterEntry([]*CatalogEntry{starter}, spilly); e != nil {
+		t.Fatalf("spilled starter picked: %+v", e)
+	}
+}
+
+func TestPackagedCatalogStarter(t *testing.T) {
+	entries := Catalog()
+	var starters []*CatalogEntry
+	for _, e := range entries {
+		if e.Starter {
+			starters = append(starters, e)
+		}
+	}
+	if len(starters) != 1 {
+		t.Fatalf("packaged catalog must ship exactly one starter, got %d", len(starters))
+	}
+	s := starters[0]
+
+	// The starter's promise: a quick download and a resident fit on a modest
+	// machine (12 GiB usable, unified memory).
+	if got := s.DownloadBytes(s.Variants[len(s.Variants)-1]); got > 5e9 {
+		t.Errorf("starter download %d bytes exceeds the 5 GB first-run budget", got)
+	}
+	modest := HardwareBudget{UsableVRAMBytes: 12 * gib, RAMAvailableBytes: 8 * gib, UMA: true}
+	e, c := StarterEntry(entries, modest)
+	if e == nil || e.ID != s.ID || !c.ZeroSpill {
+		t.Fatalf("starter does not fit a 12 GiB machine resident: %+v %+v", e, c)
+	}
+}
+
 func TestRecommendedEntry(t *testing.T) {
 	// smart is big and slow on UMA; fast is small; both resident on 64 GiB.
 	smart := testEntry("smart", 30, 90, 1.0) // UMA: 210/30 = 7 tok/s -> below pleasant floor

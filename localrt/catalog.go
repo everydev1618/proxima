@@ -1,6 +1,7 @@
 // Curated starter catalog for the managed local runtime. Port of
 // hermes-agent's local_runtime/catalog.py (MIT, Nous Research — see NOTICE);
-// catalog.json data is theirs verbatim.
+// catalog.json data is theirs verbatim, plus proxima's own qwen3.5-4b
+// starter entry (estimator inputs derived from Qwen/Qwen3.5-4B config.json).
 //
 // Every entry carries the estimator inputs (measured on real GGUFs) so the
 // picker can price a model BEFORE the user downloads gigabytes; once a file
@@ -93,6 +94,10 @@ type CatalogEntry struct {
 	// catalog time. Ranks entries for the per-machine recommendation; never
 	// displayed as a score.
 	Quality int `json:"quality,omitempty"`
+	// Starter marks the small, chatty model the first run bootstraps so a
+	// user with no server and no downloads can chat immediately. The catalog
+	// ships exactly one.
+	Starter bool `json:"starter,omitempty"`
 	// DecodeFraction is the fraction of the build's bytes read per decoded
 	// token: 1.0 for dense, the active slice for MoE. With memory bandwidth
 	// this predicts decode speed.
@@ -298,6 +303,21 @@ func RecommendedEntry(entries []*CatalogEntry, budget HardwareBudget) *Recommend
 		}
 	}
 	return &Recommendation{Entry: pick.e, Choice: pick.c, Reason: "least-painful-spilled"}
+}
+
+// StarterEntry picks the catalog's starter model for a first run, or nil
+// when none fits. The starter must fit RESIDENT: a spilled first chat crawls
+// and would teach the user that local models are miserable.
+func StarterEntry(entries []*CatalogEntry, budget HardwareBudget) (*CatalogEntry, *VariantChoice) {
+	for _, e := range entries {
+		if !e.Starter {
+			continue
+		}
+		if c := SelectVariant(e, budget); c != nil && c.ZeroSpill {
+			return e, c
+		}
+	}
+	return nil, nil
 }
 
 // ── catalog loading: packaged JSON only (no network refresh in v1) ──

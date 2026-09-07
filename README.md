@@ -11,7 +11,12 @@ proxima
 # Dashboard: http://localhost:60726
 ```
 
-No server running? proxima manages its own llama.cpp:
+No server running? On a fresh machine, `proxima` offers to set itself up: one
+y at the prompt downloads a small, chatty starter model (Qwen3.5 4B, ~3.6 GB)
+plus the llama.cpp runtime and drops you straight into chat. Headless runs
+never auto-download — the offer only appears on a controlling terminal.
+
+For everything past the starter, the managed runtime is driven explicitly:
 
 ```
 proxima models     # the curated catalog, priced against THIS machine's memory

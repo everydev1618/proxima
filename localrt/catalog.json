@@ -2,6 +2,44 @@
   "schema_version": 1,
   "models": [
     {
+      "id": "qwen3.5-4b",
+      "display_name": "Qwen3.5 4B",
+      "description": "Small, chatty starter model; quick download, fits almost any machine; sees images",
+      "repo": "unsloth/Qwen3.5-4B-GGUF",
+      "starter": true,
+      "variants": [
+        {
+          "quant": "UD-Q4_K_XL",
+          "files": [
+            {
+              "path": "Qwen3.5-4B-UD-Q4_K_XL.gguf",
+              "size_bytes": 2912109728
+            }
+          ]
+        }
+      ],
+      "n_ctx_train": 262144,
+      "full_layers": 8,
+      "recurrent_layers": 24,
+      "per_layer_f16": 4096,
+      "n_vocab": 248320,
+      "mmproj": {
+        "path": "mmproj-BF16.gguf",
+        "size_bytes": 675569344,
+        "local": "mmproj-Qwen3.5-4B-BF16.gguf"
+      },
+      "mtp": true,
+      "mtp_draft_depth": 1,
+      "sampling": {
+        "temp": "1.0",
+        "top-p": "0.95",
+        "top-k": "20",
+        "min-p": "0.0"
+      },
+      "quality": 55,
+      "decode_fraction": 1.0
+    },
+    {
       "id": "qwen3.8-27b",
       "display_name": "Qwen3.8 27B",
       "description": "Best all-round agent model; sees images; long context stays fast",

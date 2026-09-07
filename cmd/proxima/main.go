@@ -221,10 +221,18 @@ func resolveEndpoint(ctx context.Context, baseURL, model string, forceManaged bo
 		}
 	}
 
-	// Managed runtime over staged models.
+	// Managed runtime over staged models. An empty machine gets the
+	// first-run offer: pull the starter model and go straight to chat.
 	staged := localrt.StagedModelIDs()
 	if len(staged) == 0 {
-		return endpoint{}, "", nil, fmt.Errorf("no local model server running and no models staged.\n\n%s", noServerHelp)
+		id, err := bootstrapStarter(ctx)
+		if err != nil {
+			return endpoint{}, "", nil, err
+		}
+		if id == "" {
+			return endpoint{}, "", nil, fmt.Errorf("no local model server running and no models staged.\n\n%s", noServerHelp)
+		}
+		staged = []string{id}
 	}
 	sup, err := localrt.EnsureManagedRuntime("")
 	if err != nil {
@@ -314,8 +322,11 @@ func modelsCmd(args []string) error {
 			fit += fmt.Sprintf(", ~%.0f tok/s", tokS)
 		}
 		note := ""
+		if e.Starter {
+			note = "  [starter]"
+		}
 		if staged[v.ModelID()] {
-			note = "  [downloaded]"
+			note += "  [downloaded]"
 		}
 		fmt.Printf("%s%-22s %5.1f GB  %s%s\n   %s\n", marker, e.ID,
 			float64(e.DownloadBytes(v))/1e9, fit, note, e.Description)
@@ -361,22 +372,25 @@ func pullCmd(args []string) error {
 		return fmt.Errorf("%s does not fit this machine (physics refusal) — pick a smaller model", entry.ID)
 	}
 	variant := choice.Variant
-
-	// 1. Runtime binaries.
-	backend := localrt.SelectBackend(localrt.DetectGPUVendor(), "")
-	fmt.Printf("installing llama.cpp %s (%s)...\n", *tag, backend)
-	if _, err := localrt.EnsureRuntimeInstalled(*tag, backend, nil, progressPrinter()); err != nil {
-		return fmt.Errorf("runtime install: %w", err)
-	}
-
-	// 2. Model weights (+ companions).
-	fmt.Printf("downloading %s (%.1f GB) from %s...\n", variant.ModelID(),
-		float64(entry.DownloadBytes(variant))/1e9, entry.Repo)
-	if err := localrt.DownloadModel(ctx, entry, variant, progressPrinter()); err != nil {
+	if err := installRuntimeAndModel(ctx, entry, variant, *tag); err != nil {
 		return err
 	}
 	fmt.Printf("\n%s staged. Start with: proxima -managed -model %s\n", variant.ModelID(), variant.ModelID())
 	return nil
+}
+
+// installRuntimeAndModel is the shared pull core: llama.cpp binaries, then
+// the variant's weights + companions. Used by `proxima pull` and the
+// first-run starter bootstrap.
+func installRuntimeAndModel(ctx context.Context, entry *localrt.CatalogEntry, variant localrt.QuantVariant, tag string) error {
+	backend := localrt.SelectBackend(localrt.DetectGPUVendor(), "")
+	fmt.Printf("installing llama.cpp %s (%s)...\n", tag, backend)
+	if _, err := localrt.EnsureRuntimeInstalled(tag, backend, nil, progressPrinter()); err != nil {
+		return fmt.Errorf("runtime install: %w", err)
+	}
+	fmt.Printf("downloading %s (%.1f GB) from %s...\n", variant.ModelID(),
+		float64(entry.DownloadBytes(variant))/1e9, entry.Repo)
+	return localrt.DownloadModel(ctx, entry, variant, progressPrinter())
 }
 
 // progressPrinter renders one carriage-return progress line per stage/label.
