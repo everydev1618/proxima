@@ -136,6 +136,24 @@ func HFVariants(files []HFFile) []QuantVariant {
 	return out
 }
 
+// ParseHFRef parses an open-pull ref: "hf:<org>/<repo>[:<quant>]". Not an
+// HF ref (no hf: prefix, malformed repo) returns ok=false — the caller falls
+// back to catalog-id lookup.
+func ParseHFRef(ref string) (repo, quant string, ok bool) {
+	rest, found := strings.CutPrefix(ref, "hf:")
+	if !found {
+		return "", "", false
+	}
+	if i := strings.LastIndex(rest, ":"); i >= 0 {
+		rest, quant = rest[:i], rest[i+1:]
+	}
+	org, name, hasSlash := strings.Cut(rest, "/")
+	if !hasSlash || org == "" || name == "" || strings.Contains(name, "/") {
+		return "", "", false
+	}
+	return rest, quant, true
+}
+
 // HFModelProbe is everything learned about one HF model before download.
 type HFModelProbe struct {
 	Repo    string
@@ -153,6 +171,31 @@ func (p *HFModelProbe) Profile() *ModelProfile {
 		prof.WeightsBytes = p.Variant.SizeBytes()
 	}
 	return prof
+}
+
+// Fit prices the probed model against a machine budget under the same rules
+// as curated entries. MTP posture is unknowable pre-download, so logits are
+// priced without it; the staged header re-prices at launch.
+func (p *HFModelProbe) Fit(budget HardwareBudget) *VariantChoice {
+	profile := p.Profile()
+	overhead := RuntimeOverheadBytes + UbLogitsBytes(profile.NVocab, false, false)
+	return fitProfile(profile, p.Variant, overhead, budget)
+}
+
+// CatalogEntry synthesizes a minimal entry so an open pull flows through the
+// same download path as curated models. Estimator fields stay zero — pricing
+// always comes from the probed or staged header — and no editorial fields
+// (Quality, Starter) are invented: synthesized entries never join the
+// packaged catalog or RecommendedEntry.
+func (p *HFModelProbe) CatalogEntry() *CatalogEntry {
+	return &CatalogEntry{
+		ID:          p.Variant.ModelID(),
+		DisplayName: p.Variant.ModelID(),
+		Repo:        p.Repo,
+		Variants:    []QuantVariant{p.Variant},
+		NCtxTrain:   p.Header.NCtxTrain(),
+		NVocab:      p.Header.NVocab(),
+	}
 }
 
 // ProbeHFModel lists a repo, picks the variant matching quant

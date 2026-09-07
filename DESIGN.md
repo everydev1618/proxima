@@ -139,7 +139,7 @@ divergences from the Python original:
   locally but slow; don't block the turn).
 - Terminal REPL polish (govega `repl` exists; make it the front door).
 
-### Phase 4 — open Hugging Face pull (the SLM firehose, tiered)
+### Phase 4 — open Hugging Face pull (the SLM firehose, tiered) — DONE
 
 The curated catalog was never a distribution channel — `download.go` already
 resolves everything through `huggingface.co/<repo>/resolve/main/<file>`. The
@@ -149,9 +149,10 @@ breaking download-to-gorgeous, in tiers:
 - **Tier 1 (default, unchanged):** the curated catalog. First run, `proxima
   models`, the recommendation engine — all stay exactly as they are. This is
   the "we vouch for these" tier; the zero-questions promise lives here.
-- **Tier 2 (escape hatch):** `proxima pull hf:<repo>[:<quant>]` for any of the
-  thousands of GGUF repos on HF. Everything derivable is derived; nothing is
-  vouched for.
+- **Tier 2 (escape hatch, shipped):** `proxima pull hf:<repo>[:<quant>]` for
+  any of the thousands of GGUF repos on HF. Everything derivable is derived;
+  nothing is vouched for. An ambiguous ref errors with the repo's actual
+  quant list — open pulls never guess.
 
 The load-bearing move is the **streaming header probe** (spiked in
 `localrt/hf.go`): GGUF puts metadata + tensor table at the front of the file,
@@ -170,14 +171,18 @@ catalog entry needed. Mechanics, all spiked:
   `Profile()` plugs straight into `SelectVariant`-class fitting and `CtxBytes`.
 
 Derived, not curated: sampling comes from baked `general.sampling.*` keys when
-present, else llama-server defaults; no editorial `Quality` score is invented
-for open pulls — they never enter `RecommendedEntry`. What replaces curation
-is **earned trust**: extend the readiness generation into a ~30s
-grammar-constrained tool-call smoke eval and stamp the result per staged
-model. That's the claim no HF leaderboard can make — *this model, at this
-quant, on this hardware, can (or cannot) drive an orchestrator* — and it's
-what "proxima is all about SLMs" actually means: not catalog breadth, harness
-reliability.
+present, else llama-server defaults (`presetFor` already prefers the staged
+header and treats catalog entries as optional, so uncurated models flow
+through unchanged); no editorial `Quality` score is invented for open pulls —
+they never enter `RecommendedEntry`. What replaces curation is **earned
+trust** (shipped): the first managed boot of each model runs a tool-call
+smoke eval (`Supervisor.TouchToolCall` — forced tool choice, verified name +
+parseable arguments + obvious intent), and the verdict is stamped per model
+id (`smoke.json`, cleared on delete, surfaced in `proxima status`). Advice,
+never a gate. That's the claim no HF leaderboard can make — *this model, at
+this quant, on this hardware, can (or cannot) drive an orchestrator* — and
+it's what "proxima is all about SLMs" actually means: not catalog breadth,
+harness reliability.
 
 Scope note: users on external servers already have HF breadth (`ollama pull
 hf.co/...`, LM Studio's browser), so open pull is a managed-runtime feature

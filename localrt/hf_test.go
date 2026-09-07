@@ -207,3 +207,86 @@ func TestProbeHFModel(t *testing.T) {
 		t.Errorf("split weights bytes = %d, want 7000", got)
 	}
 }
+
+func TestParseHFRef(t *testing.T) {
+	cases := []struct {
+		ref, repo, quant string
+		ok               bool
+	}{
+		{"hf:unsloth/Qwen3-GGUF", "unsloth/Qwen3-GGUF", "", true},
+		{"hf:unsloth/Qwen3-GGUF:Q4_K_M", "unsloth/Qwen3-GGUF", "Q4_K_M", true},
+		{"hf:", "", "", false},
+		{"hf:noslash", "", "", false},
+		{"hf:a/b/c", "", "", false},
+		{"hf:/b", "", "", false},
+		{"hf:a/", "", "", false},
+		{"qwen3.5-4b", "", "", false}, // catalog id, not an HF ref
+	}
+	for _, c := range cases {
+		repo, quant, ok := ParseHFRef(c.ref)
+		if repo != c.repo || quant != c.quant || ok != c.ok {
+			t.Errorf("ParseHFRef(%q) = %q %q %v, want %q %q %v",
+				c.ref, repo, quant, ok, c.repo, c.quant, c.ok)
+		}
+	}
+}
+
+// probeForFit builds an HFModelProbe from a synthetic header on disk.
+func probeForFit(t *testing.T) *HFModelProbe {
+	t.Helper()
+	b := &ggufBuilder{}
+	b.str("general.architecture", "qwen3").
+		u32("qwen3.block_count", 4).
+		u32("qwen3.context_length", 262144).
+		u32("qwen3.embedding_length", 1024).
+		u32("qwen3.attention.head_count", 8).
+		u32("qwen3.attention.head_count_kv", 2).
+		tensor("token_embd.weight", []uint64{1024, 100}, 1)
+	h, err := ReadGGUFHeader(b.write(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &HFModelProbe{
+		Repo:    "org/repo-GGUF",
+		Variant: QuantVariant{Quant: "Q4_K_M", Files: []AssetFile{{Path: "m-Q4_K_M.gguf", SizeBytes: 3_000_000_000}}},
+		Header:  h,
+	}
+}
+
+func TestHFModelProbeFit(t *testing.T) {
+	p := probeForFit(t)
+	generous := HardwareBudget{UsableVRAMBytes: 64 << 30, RAMAvailableBytes: 32 << 30}
+	c := p.Fit(generous)
+	if c == nil || !c.ZeroSpill || c.ReasonKey != "best-large-window" {
+		t.Errorf("generous fit = %+v", c)
+	}
+	if c.Variant.Quant != "Q4_K_M" {
+		t.Errorf("fit variant = %q", c.Variant.Quant)
+	}
+	// Physics refusal on a machine that cannot hold the weights anywhere.
+	if c := p.Fit(HardwareBudget{UsableVRAMBytes: 1 << 20}); c != nil {
+		t.Errorf("tiny budget should refuse, got %+v", c)
+	}
+}
+
+func TestHFModelProbeCatalogEntry(t *testing.T) {
+	p := probeForFit(t)
+	e := p.CatalogEntry()
+	if e.Repo != "org/repo-GGUF" || e.ID != "m-Q4_K_M" {
+		t.Errorf("entry = %+v", e)
+	}
+	if len(e.Variants) != 1 || e.Variants[0].Quant != "Q4_K_M" {
+		t.Errorf("variants = %+v", e.Variants)
+	}
+	if e.NCtxTrain != 262144 {
+		t.Errorf("n_ctx_train = %d", e.NCtxTrain)
+	}
+	// Never curated: open pulls must not carry an editorial quality score.
+	if e.Quality != 0 || e.Starter {
+		t.Errorf("synthesized entry leaked curation fields: %+v", e)
+	}
+	// The synthesized entry must satisfy the download path's inputs.
+	if got := e.DownloadBytes(e.Variants[0]); got != 3_000_000_000 {
+		t.Errorf("download bytes = %d", got)
+	}
+}

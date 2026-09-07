@@ -25,6 +25,21 @@ proxima -managed   # boot the managed runtime (readiness proven by a real genera
 proxima status     # runtime, staged models, launch policies
 ```
 
+Beyond the curated catalog, any of the thousands of GGUF repos on Hugging
+Face can be pulled directly:
+
+```
+proxima pull hf:unsloth/Qwen3-8B-GGUF:Q4_K_M
+```
+
+The repo's file tree is listed, the chosen quant's GGUF header is streamed (a
+few MB — never the weights), and the same physics check runs before anything
+big downloads. Open pulls are uncurated: launch presets come from the file's
+own header, and the first managed boot runs a tool-call smoke eval — the
+verdict is stamped per model (`proxima status` flags failures) so you know
+whether this model, at this quant, on this hardware, can actually drive an
+agent.
+
 The managed runtime is a Go port of hermes-agent's `local_runtime` (MIT,
 Nous Research — see NOTICE): GGUF header parsing, VRAM/RAM budget math with a
 physics refusal when a model won't fit, a 64K→96K→144K context ladder, per-

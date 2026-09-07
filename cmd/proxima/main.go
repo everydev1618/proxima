@@ -66,6 +66,7 @@ Usage:
   proxima [run] [flags]   start the orchestrator (default)
   proxima models          show the model catalog with what fits THIS machine
   proxima pull [id]       install the runtime + download a model (default: recommended)
+                          id can be any HF GGUF repo: hf:<org>/<repo>[:<quant>]
   proxima status          managed runtime status
   proxima version
 
@@ -253,6 +254,23 @@ func resolveEndpoint(ctx context.Context, baseURL, model string, forceManaged bo
 		sup.Stop()
 		return endpoint{}, "", nil, fmt.Errorf("model %s loaded but failed the readiness generation (log: %s)", chosen, sup.LogPath)
 	}
+	// Tool-call smoke eval, once per model: readiness proves it talks, this
+	// proves it drives. Advice, never a gate — a failing model still runs.
+	passed, known := localrt.SmokeStamp(chosen)
+	if !known {
+		fmt.Printf("running tool-call smoke eval for %s...\n", chosen)
+		passed = sup.TouchToolCall(chosen, 120*time.Second)
+		if err := localrt.SaveSmokeStamp(chosen, passed); err != nil {
+			fmt.Fprintf(os.Stderr, "warn: could not persist smoke verdict: %v\n", err)
+		}
+	}
+	if !known || !passed {
+		if passed {
+			fmt.Printf("tool-call smoke: PASS — %s emits well-formed tool calls\n", chosen)
+		} else {
+			fmt.Fprintf(os.Stderr, "warn: tool-call smoke: FAIL — %s did not produce a valid tool call; agents may be unreliable on this model\n", chosen)
+		}
+	}
 	return endpoint{kind: "managed llama.cpp", origin: fmt.Sprintf("http://127.0.0.1:%d", sup.Port),
 		baseURL: sup.BaseURL(), apiKey: sup.APIKey}, chosen, sup, nil
 }
@@ -355,9 +373,12 @@ func pullCmd(args []string) error {
 	entries := localrt.Catalog()
 	var entry *localrt.CatalogEntry
 	if fs.NArg() > 0 {
+		if repo, quant, ok := localrt.ParseHFRef(fs.Arg(0)); ok {
+			return pullHF(ctx, repo, quant, *tag, budget)
+		}
 		entry = localrt.EntryByID(entries, fs.Arg(0))
 		if entry == nil {
-			return fmt.Errorf("unknown model %q — see `proxima models`", fs.Arg(0))
+			return fmt.Errorf("unknown model %q — see `proxima models`, or pull any GGUF repo with hf:<org>/<repo>[:<quant>]", fs.Arg(0))
 		}
 	} else {
 		rec := localrt.RecommendedEntry(entries, budget)
@@ -376,6 +397,35 @@ func pullCmd(args []string) error {
 		return err
 	}
 	fmt.Printf("\n%s staged. Start with: proxima -managed -model %s\n", variant.ModelID(), variant.ModelID())
+	return nil
+}
+
+// pullHF is the open-catalog escape hatch: probe the repo's streamed header,
+// run the same physics check as curated pulls, download only what fits.
+// Nothing here is vouched for — the staged file's own header drives launch
+// presets, and the first managed boot runs the tool-call smoke eval.
+func pullHF(ctx context.Context, repo, quant, tag string, budget localrt.HardwareBudget) error {
+	fmt.Printf("probing %s (header only, no weights)...\n", repo)
+	probe, err := localrt.ProbeHFModel(ctx, repo, quant)
+	if err != nil {
+		return err
+	}
+	h := probe.Header
+	fmt.Printf("  %s: %s, %d layers, %dK trained context, %.1f GB weights\n",
+		probe.Variant.ModelID(), h.Architecture(), h.NLayer(), h.NCtxTrain()/1024,
+		float64(probe.Profile().WeightsBytes)/1e9)
+	choice := probe.Fit(budget)
+	if choice == nil {
+		return fmt.Errorf("%s does not fit this machine (physics refusal) — try a smaller quant", probe.Variant.ModelID())
+	}
+	if !choice.ZeroSpill {
+		fmt.Println("  fits only spilled to RAM — expect slow decode")
+	}
+	if err := installRuntimeAndModel(ctx, probe.CatalogEntry(), probe.Variant, tag); err != nil {
+		return err
+	}
+	fmt.Printf("\n%s staged (uncurated — first boot runs a tool-call check). Start with: proxima -managed -model %s\n",
+		probe.Variant.ModelID(), probe.Variant.ModelID())
 	return nil
 }
 
@@ -431,7 +481,14 @@ func statusCmd(args []string) error {
 	if len(staged) == 0 {
 		fmt.Println("staged models:  none")
 	} else {
-		fmt.Printf("staged models:  %s\n", strings.Join(staged, ", "))
+		notes := make([]string, len(staged))
+		for i, id := range staged {
+			notes[i] = id
+			if passed, known := localrt.SmokeStamp(id); known && !passed {
+				notes[i] += " [tool-calls FAIL]"
+			}
+		}
+		fmt.Printf("staged models:  %s\n", strings.Join(notes, ", "))
 	}
 	if state := localrt.ReadServerState(); state != nil {
 		fmt.Printf("managed server: %s (pid %d)\n", state.BaseURL, state.PID)

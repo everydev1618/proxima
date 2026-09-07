@@ -71,5 +71,8 @@ func DeleteModel(modelID string) error {
 			}
 		}
 	}
+	if err := ClearSmokeStamp(modelID); err != nil {
+		return err
+	}
 	return ClearWindowOverride(modelID)
 }

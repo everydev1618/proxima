@@ -162,13 +162,19 @@ func SelectVariant(e *CatalogEntry, budget HardwareBudget) *VariantChoice {
 	if e.MMProj != nil {
 		overhead += e.MMProj.SizeBytes
 	}
-	native := e.NCtxTrain
+	variant := e.Variants[len(e.Variants)-1]
+	return fitProfile(e.Profile(variant), variant, overhead, budget)
+}
+
+// fitProfile is the fitting core shared by curated entries and open HF
+// probes: weights + overhead + KV against VRAM, spilling to RAM as a last
+// resort. Headroom buys a bigger window, never a bigger quant.
+func fitProfile(profile *ModelProfile, variant QuantVariant, overhead int64, budget HardwareBudget) *VariantChoice {
+	native := profile.NCtxTrain
 	if native == 0 {
 		native = Floor
 	}
-	variant := e.Variants[len(e.Variants)-1]
-	profile := e.Profile(variant)
-	need := variant.WeightsBytes() + overhead
+	need := profile.WeightsBytes + overhead
 	vram := budget.UsableVRAMBytes
 
 	target := TargetWindow
