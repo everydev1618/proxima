@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -74,6 +75,7 @@ Run flags:
   -base-url   local model server origin (default: auto-detect)
   -model      model id to use (default: first advertised)
   -managed    skip external-server detection; use the managed runtime
+  -approve    tool approval gate: exec (default), all (+file writes), off
 `)
 }
 
@@ -86,6 +88,7 @@ func runCmd(args []string) error {
 	baseURL := fs.String("base-url", "", "local model server origin")
 	model := fs.String("model", "", "model id to use")
 	managed := fs.Bool("managed", false, "use the managed runtime even when an external server runs")
+	approve := fs.String("approve", "exec", "tool approval gate: exec (code-running tools), all (+file writes), off")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -126,6 +129,19 @@ func runCmd(args []string) error {
 		return fmt.Errorf("creating vega home: %w", err)
 	}
 
+	// Tool approval gate: a local model does not run shell commands on this
+	// machine without a human answering y.
+	if gated := approvalSets[*approve]; gated != nil {
+		if gate, ok := newApprover(); ok {
+			interp.Tools().Use(gate.middleware(gated))
+			fmt.Printf("approval gate on (-approve=%s): %s prompt in this terminal\n", *approve, gateNames(gated))
+		} else {
+			fmt.Fprintln(os.Stderr, "warn: approval gate DISABLED — no controlling terminal (run with -approve=off to silence)")
+		}
+	} else if *approve != "off" {
+		return fmt.Errorf("unknown -approve mode %q (exec, all, off)", *approve)
+	}
+
 	fmt.Printf("lite-vega %s — %s at %s, model %s\n", version, endpoint.kind, endpoint.origin, chosen)
 
 	cfg := serve.Config{
@@ -144,6 +160,16 @@ func runCmd(args []string) error {
 		},
 	}
 	return serve.New(interp, cfg).Start(ctx)
+}
+
+// gateNames renders a gated set for the startup banner.
+func gateNames(gated map[string]bool) string {
+	names := make([]string, 0, len(gated))
+	for n := range gated {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	return strings.Join(names, ", ")
 }
 
 type endpoint struct {
