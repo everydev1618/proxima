@@ -63,4 +63,6 @@ go build ./cmd/proxima
 go test ./...
 ```
 
-Requires `../govega` checked out as a sibling (module `replace` directive).
+A plain clone builds against the released govega. To develop against a local
+`../govega` checkout, use a Go workspace: `go work init ./govega ./proxima`
+from the parent directory.
