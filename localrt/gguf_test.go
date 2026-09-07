@@ -70,16 +70,20 @@ func (b *ggufBuilder) tensor(name string, dims []uint64, ttype uint32) *ggufBuil
 	return b
 }
 
-func (b *ggufBuilder) write(t *testing.T) string {
-	t.Helper()
+func (b *ggufBuilder) assemble() []byte {
 	b.buf.Write(ggufMagic[:])
 	binary.Write(&b.buf, binary.LittleEndian, uint32(3)) // version
 	binary.Write(&b.buf, binary.LittleEndian, b.nTens)
 	binary.Write(&b.buf, binary.LittleEndian, b.nKV)
 	b.buf.Write(b.kv.Bytes())
 	b.buf.Write(b.tensors.Bytes())
+	return b.buf.Bytes()
+}
+
+func (b *ggufBuilder) write(t *testing.T) string {
+	t.Helper()
 	path := filepath.Join(t.TempDir(), "test.gguf")
-	if err := os.WriteFile(path, b.buf.Bytes(), 0o644); err != nil {
+	if err := os.WriteFile(path, b.assemble(), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return path

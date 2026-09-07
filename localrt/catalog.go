@@ -76,16 +76,16 @@ type CatalogEntry struct {
 	Variants    []QuantVariant `json:"variants"`
 	// Estimator inputs (measured or config-derived; quant changes weights,
 	// never KV). The GGUF header is the authority after download.
-	NCtxTrain       int   `json:"n_ctx_train"`
-	FullLayers      int   `json:"full_layers"`
-	RecurrentLayers int   `json:"recurrent_layers"`
-	PerLayerF16     int   `json:"per_layer_f16"` // KV bytes/token per full-attention layer
-	SWALayers       int   `json:"swa_layers,omitempty"`
-	SWAWindow       int   `json:"swa_window,omitempty"`
-	MoE             bool  `json:"moe,omitempty"`
-	MTP             bool  `json:"mtp,omitempty"` // ships MTP heads (spec decode when loaded)
-	MTPDraftDepth   int   `json:"mtp_draft_depth,omitempty"`
-	NVocab          int   `json:"n_vocab,omitempty"`
+	NCtxTrain       int               `json:"n_ctx_train"`
+	FullLayers      int               `json:"full_layers"`
+	RecurrentLayers int               `json:"recurrent_layers"`
+	PerLayerF16     int               `json:"per_layer_f16"` // KV bytes/token per full-attention layer
+	SWALayers       int               `json:"swa_layers,omitempty"`
+	SWAWindow       int               `json:"swa_window,omitempty"`
+	MoE             bool              `json:"moe,omitempty"`
+	MTP             bool              `json:"mtp,omitempty"` // ships MTP heads (spec decode when loaded)
+	MTPDraftDepth   int               `json:"mtp_draft_depth,omitempty"`
+	NVocab          int               `json:"n_vocab,omitempty"`
 	MMProj          *AssetFile        `json:"mmproj,omitempty"` // vision projector
 	Draft           *AssetFile        `json:"draft,omitempty"`  // spec-decode draft model
 	Sampling        map[string]string `json:"sampling,omitempty"`

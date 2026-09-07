@@ -139,6 +139,52 @@ divergences from the Python original:
   locally but slow; don't block the turn).
 - Terminal REPL polish (govega `repl` exists; make it the front door).
 
+### Phase 4 — open Hugging Face pull (the SLM firehose, tiered)
+
+The curated catalog was never a distribution channel — `download.go` already
+resolves everything through `huggingface.co/<repo>/resolve/main/<file>`. The
+catalog is a *trust filter* over HF. Phase 4 opens the firehose without
+breaking download-to-gorgeous, in tiers:
+
+- **Tier 1 (default, unchanged):** the curated catalog. First run, `proxima
+  models`, the recommendation engine — all stay exactly as they are. This is
+  the "we vouch for these" tier; the zero-questions promise lives here.
+- **Tier 2 (escape hatch):** `proxima pull hf:<repo>[:<quant>]` for any of the
+  thousands of GGUF repos on HF. Everything derivable is derived; nothing is
+  vouched for.
+
+The load-bearing move is the **streaming header probe** (spiked in
+`localrt/hf.go`): GGUF puts metadata + tensor table at the front of the file,
+so a plain GET that stops reading after the header prices any HF model for a
+few MB of transfer — layers, KV geometry, context, vocab, MoE, even
+publisher-baked `general.sampling.*` — and `ProfileFromGGUF` + the physics
+refusal run **before** the user downloads 50GB. Same math, same refusal, no
+catalog entry needed. Mechanics, all spiked:
+
+- `ListHFFiles`: the repo tree API (`/api/models/<repo>/tree/main`,
+  paginated), file paths + exact sizes — feeds the estimator and progress bars
+  exactly like curated `AssetFile`s.
+- `HFVariants`: group GGUF weight files into `QuantVariant`s (split parts
+  merged, mmproj/companions excluded, quant tag parsed from the filename).
+- `ProbeHFModel`: list → pick variant → stream header → `HFModelProbe`, whose
+  `Profile()` plugs straight into `SelectVariant`-class fitting and `CtxBytes`.
+
+Derived, not curated: sampling comes from baked `general.sampling.*` keys when
+present, else llama-server defaults; no editorial `Quality` score is invented
+for open pulls — they never enter `RecommendedEntry`. What replaces curation
+is **earned trust**: extend the readiness generation into a ~30s
+grammar-constrained tool-call smoke eval and stamp the result per staged
+model. That's the claim no HF leaderboard can make — *this model, at this
+quant, on this hardware, can (or cannot) drive an orchestrator* — and it's
+what "proxima is all about SLMs" actually means: not catalog breadth, harness
+reliability.
+
+Scope note: users on external servers already have HF breadth (`ollama pull
+hf.co/...`, LM Studio's browser), so open pull is a managed-runtime feature
+only. And explicitly NOT: scraping/ingesting HF's catalog wholesale, embedded
+mega-catalogs, auto-refresh — the embedded catalog.json stays the curated
+truth; open pulls are priced on demand from the source.
+
 ## Non-goals (deliberately not built)
 
 No chat gateways (Discord/Telegram), no OAuth, no Postgres (SQLite only), no

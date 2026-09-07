@@ -7,6 +7,7 @@
 package localrt
 
 import (
+	"bufio"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -94,11 +95,11 @@ func (h *GGUFHeader) archInt(suffix string) int {
 	return toInt(h.archKey(suffix))
 }
 
-func (h *GGUFHeader) NLayer() int         { return h.archInt("block_count") }
-func (h *GGUFHeader) NCtxTrain() int      { return h.archInt("context_length") }
-func (h *GGUFHeader) NEmbd() int          { return h.archInt("embedding_length") }
-func (h *GGUFHeader) SlidingWindow() int  { return h.archInt("attention.sliding_window") }
-func (h *GGUFHeader) ExpertCount() int    { return h.archInt("expert_count") }
+func (h *GGUFHeader) NLayer() int        { return h.archInt("block_count") }
+func (h *GGUFHeader) NCtxTrain() int     { return h.archInt("context_length") }
+func (h *GGUFHeader) NEmbd() int         { return h.archInt("embedding_length") }
+func (h *GGUFHeader) SlidingWindow() int { return h.archInt("attention.sliding_window") }
+func (h *GGUFHeader) ExpertCount() int   { return h.archInt("expert_count") }
 
 // FullAttentionInterval is the GDN-hybrid discriminator (qwen35 family):
 // every Nth layer is full attention, the rest are linear/recurrent. 0 = not
@@ -343,21 +344,28 @@ func ReadGGUFHeader(path string) (*GGUFHeader, error) {
 		return nil, err
 	}
 	defer f.Close()
+	return parseGGUFHeader(bufio.NewReaderSize(f, 1<<20), path)
+}
 
+// parseGGUFHeader parses a GGUF header from any reader (a local file or a
+// streaming HTTP body); src labels errors and the returned header's Path.
+// It reads exactly the header bytes and never touches tensor data, which is
+// what makes remote probing cheap.
+func parseGGUFHeader(r io.Reader, src string) (*GGUFHeader, error) {
 	var magic [4]byte
-	if _, err := io.ReadFull(f, magic[:]); err != nil {
+	if _, err := io.ReadFull(r, magic[:]); err != nil {
 		return nil, err
 	}
 	if magic != ggufMagic {
-		return nil, fmt.Errorf("%w: %s", errNotGGUF, path)
+		return nil, fmt.Errorf("%w: %s", errNotGGUF, src)
 	}
 
-	g := &ggufReader{r: f}
+	g := &ggufReader{r: r}
 	version := g.u32()
 	nTensors := g.u64()
 	nKV := g.u64()
 	if g.err == nil && (nKV > maxHeaderKV || nTensors > maxHeaderTens) {
-		return nil, fmt.Errorf("gguf header counts out of range in %s", path)
+		return nil, fmt.Errorf("gguf header counts out of range in %s", src)
 	}
 
 	metadata := make(map[string]any, nKV)
@@ -375,7 +383,7 @@ func ReadGGUFHeader(path string) (*GGUFHeader, error) {
 			break
 		}
 		if nDims > 8 {
-			return nil, fmt.Errorf("gguf tensor with %d dims in %s", nDims, path)
+			return nil, fmt.Errorf("gguf tensor with %d dims in %s", nDims, src)
 		}
 		elems := int64(1)
 		for d := uint32(0); d < nDims; d++ {
@@ -388,7 +396,7 @@ func ReadGGUFHeader(path string) (*GGUFHeader, error) {
 		}
 		size, ok := ggmlTypeSizes[ttype]
 		if !ok {
-			return nil, fmt.Errorf("unknown ggml tensor type %d in %s", ttype, path)
+			return nil, fmt.Errorf("unknown ggml tensor type %d in %s", ttype, src)
 		}
 		nbytes := (elems / size[1]) * size[0]
 		tensorBytes += nbytes
@@ -397,9 +405,9 @@ func ReadGGUFHeader(path string) (*GGUFHeader, error) {
 		}
 	}
 	if g.err != nil {
-		return nil, fmt.Errorf("reading gguf header of %s: %w", path, g.err)
+		return nil, fmt.Errorf("reading gguf header of %s: %w", src, g.err)
 	}
 
-	return &GGUFHeader{Path: path, Version: version, Metadata: metadata,
+	return &GGUFHeader{Path: src, Version: version, Metadata: metadata,
 		NTensors: nTensors, TensorBytes: tensorBytes, EmbdTableBytes: embdBytes}, nil
 }
