@@ -28,14 +28,23 @@ func TestMain(m *testing.M) {
 // supervisor: /health, /models, /models/load, /v1/chat/completions, /slots,
 // /metrics.
 func runFakeRouter() {
-	port := ""
+	port, modelsDir := "", ""
 	for i, a := range os.Args {
 		if a == "--port" && i+1 < len(os.Args) {
 			port = os.Args[i+1]
 		}
+		if a == "--models-dir" && i+1 < len(os.Args) {
+			modelsDir = os.Args[i+1]
+		}
 	}
+	// Like the real router, the model list comes from the models dir at
+	// spawn time.
 	var mu sync.Mutex
-	status := map[string]string{"tiny-model": "unloaded"}
+	status := map[string]string{}
+	for _, p := range StagedIn(modelsDir, false) {
+		id := ModelIDFromStem(strings.TrimSuffix(filepath.Base(p), ".gguf"))
+		status[id] = "unloaded"
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -106,6 +115,8 @@ func TestSupervisorLifecycle(t *testing.T) {
 	t.Setenv("VEGA_HOME", t.TempDir())
 	modelsDir := ModelsDir()
 	os.MkdirAll(modelsDir, 0o755)
+	// The fake router derives its model list from the models dir.
+	os.WriteFile(filepath.Join(modelsDir, "tiny-model.gguf"), []byte("x"), 0o644)
 
 	sup := NewSupervisor(t.TempDir(), modelsDir)
 	sup.Exe = helperExe(t)

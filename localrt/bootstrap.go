@@ -63,11 +63,8 @@ func EnsureManagedRuntime(tag string) (*Supervisor, error) {
 	presetPath := RuntimesRoot() + "/presets.ini"
 	entries, err := GeneratePresets(ModelsDir(), ProbeBudget(true), presetPath, Catalog())
 	if err != nil {
-		// Degradation ladder: a STALE policy still beats no policy. Keep
-		// serving with the previous INI when one exists.
-		if _, statErr := os.Stat(presetPath); statErr != nil {
-			presetPath = ""
-		}
+		// Degradation ladder: a STALE policy still beats no policy — spawn
+		// omits the flag only when no INI exists at all.
 		slog.Error("preset generation failed; serving with previous/no launch policy", "err", err)
 	}
 	for _, e := range entries {
@@ -78,6 +75,12 @@ func EnsureManagedRuntime(tag string) (*Supervisor, error) {
 
 	sup := NewSupervisor(installDir, ModelsDir())
 	sup.PresetPath = presetPath
+	// Every respawn (crash restart, growth bounce) regenerates the launch
+	// policy so new models and grown windows always take effect.
+	sup.PreSpawn = func() error {
+		_, err := GeneratePresets(ModelsDir(), ProbeBudget(true), presetPath, Catalog())
+		return err
+	}
 	if err := sup.Start(120 * time.Second); err != nil {
 		// start can fail after the router process exists (health timeout):
 		// leaving it running unsupervised strands its VRAM behind a port

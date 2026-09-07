@@ -102,6 +102,17 @@ func runCmd(args []string) error {
 	}
 	if sup != nil {
 		defer sup.Stop()
+		// Grow-before-compact: on a context-window overflow, try granting
+		// the next ladder rung (persist, bounce, prove readiness) before
+		// govega compacts the conversation.
+		model := chosen
+		vega.SetContextPressureHook(func(p *vega.Process) bool {
+			window, ok := localrt.MaybeGrowWindow(sup, model, localrt.ProbeBudget(true))
+			if ok {
+				fmt.Printf("context window grown to %dK for %s; retrying without compaction\n", window/1024, model)
+			}
+			return ok
+		})
 	}
 
 	// govega's llm.New() returns the OpenAI-compat client when

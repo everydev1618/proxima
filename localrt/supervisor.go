@@ -134,6 +134,10 @@ type Supervisor struct {
 	PresetPath string
 	// Exe overrides the server binary (tests); empty resolves from InstallDir.
 	Exe string
+	// PreSpawn, when set, runs before every spawn (first boot, crash
+	// restarts, bounces) — the place to regenerate launch presets so a
+	// respawned router always starts with current policy.
+	PreSpawn func() error
 
 	client *http.Client
 
@@ -143,6 +147,7 @@ type Supervisor struct {
 	primaryModel string
 	restarts     int
 	stopping     bool
+	gen          int // watchdog generation; a stale watchdog must not respawn
 	idleSince    map[string]time.Time
 }
 
@@ -228,6 +233,11 @@ func (s *Supervisor) exePath() (string, error) {
 }
 
 func (s *Supervisor) spawnLocked() error {
+	if s.PreSpawn != nil {
+		if err := s.PreSpawn(); err != nil {
+			slog.Warn("pre-spawn hook failed; spawning with previous state", "err", err)
+		}
+	}
 	exe, err := s.exePath()
 	if err != nil {
 		return err
@@ -303,6 +313,8 @@ func (s *Supervisor) writeState() {
 func (s *Supervisor) Start(healthTimeout time.Duration) error {
 	s.mu.Lock()
 	s.stopping = false
+	s.gen++
+	gen := s.gen
 	if err := s.spawnLocked(); err != nil {
 		s.mu.Unlock()
 		return err
@@ -314,8 +326,24 @@ func (s *Supervisor) Start(healthTimeout time.Duration) error {
 	s.mu.Lock()
 	s.writeState()
 	s.mu.Unlock()
-	go s.watch()
+	go s.watch(gen)
 	return nil
+}
+
+// Bounce restarts the router synchronously (kill, respawn via Start, wait
+// healthy). Used when the launch policy or staged set changed — the router's
+// model list and windows are spawn-only. Sessions ride through on the stable
+// port + persisted key; the watchdog generation guard keeps the outgoing
+// watchdog from double-respawning.
+func (s *Supervisor) Bounce(healthTimeout time.Duration) error {
+	s.mu.Lock()
+	s.stopping = true
+	cmd := s.cmd
+	s.mu.Unlock()
+	if cmd != nil && cmd.Process != nil {
+		killProcessGroup(cmd, 10*time.Second)
+	}
+	return s.Start(healthTimeout)
 }
 
 func (s *Supervisor) procExited() (int, bool) {
@@ -351,21 +379,24 @@ func (s *Supervisor) waitHealth(timeout time.Duration) error {
 	return fmt.Errorf("llama-server not healthy after %s (log: %s)", timeout, s.LogPath)
 }
 
-// watch restarts the router (not its children) on crash, with backoff.
-func (s *Supervisor) watch() {
+// watch restarts the router (not its children) on crash, with backoff. gen
+// guards against a superseded watchdog (Bounce/Start started a newer one)
+// respawning on top of the new generation's process.
+func (s *Supervisor) watch(gen int) {
 	for {
 		s.mu.Lock()
-		stopping, cmd := s.stopping, s.cmd
+		stale := s.stopping || s.gen != gen
+		cmd := s.cmd
 		s.mu.Unlock()
-		if stopping || cmd == nil {
+		if stale || cmd == nil {
 			return
 		}
 		err := cmd.Wait() // reaps; returns when the process exits
 		s.mu.Lock()
-		stopping = s.stopping
+		stale = s.stopping || s.gen != gen
 		restarts := s.restarts
 		s.mu.Unlock()
-		if stopping {
+		if stale {
 			return
 		}
 		backoff := restartBackoff[min(restarts, len(restartBackoff)-1)]
@@ -373,7 +404,7 @@ func (s *Supervisor) watch() {
 		time.Sleep(backoff)
 
 		s.mu.Lock()
-		if s.stopping {
+		if s.stopping || s.gen != gen {
 			s.mu.Unlock()
 			return
 		}
