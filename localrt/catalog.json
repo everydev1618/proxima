@@ -28,8 +28,6 @@
         "size_bytes": 675569344,
         "local": "mmproj-Qwen3.5-4B-BF16.gguf"
       },
-      "mtp": true,
-      "mtp_draft_depth": 1,
       "sampling": {
         "temp": "1.0",
         "top-p": "0.95",
