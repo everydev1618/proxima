@@ -89,7 +89,22 @@ binary.
   on the local model. Friendly per-server-type guidance when nothing is
   running or no model is loaded.
 
-### Phase 2 — managed runtime (port of hermes `hermes_cli/local_runtime/`, 3,173 lines — the best code in that repo)
+### Phase 2 — managed runtime (port of hermes `hermes_cli/local_runtime/`, 3,173 lines — the best code in that repo) — DONE
+
+Shipped in `localrt/` (see NOTICE for the MIT attribution). Deliberate
+divergences from the Python original:
+- Managed router port is 18535, not hermes' 18434 — both harnesses on one
+  box must not fight over a port.
+- No CUDA-driver-API unified-pool probe (needs dlopen); NVIDIA carve-out
+  devices budget from the smi number, which errs safe. Revisit with purego.
+- No cross-process adoption of an incumbent server: lite-vega stops the
+  state-file server and boots fresh with regenerated presets (sessions ride
+  through on the stable port + persisted key).
+- No in-memory catalog refresh from the repo: the embedded catalog.json is
+  the truth until a release updates it.
+- Growth execution (`MaybeGrowWindow`) is mechanism-only for now: the
+  occupancy trigger belongs at govega's compaction gate (upstream change #6's
+  natural home) — persistence, decision gates, and preset restore are all in.
 - Verified llama.cpp binary download per GPU backend (cuda/metal/vulkan/cpu),
   SHA256-checked, into `~/.vega/runtimes/llamacpp/<tag>/`.
 - GGUF header parsing; VRAM/RAM budget probe; KV-cache byte math with a

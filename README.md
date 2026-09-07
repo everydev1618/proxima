@@ -11,8 +11,24 @@ lite-vega
 # Dashboard: http://localhost:60726
 ```
 
+No server running? lite-vega manages its own llama.cpp:
+
+```
+lite-vega models     # the curated catalog, priced against THIS machine's memory
+lite-vega pull       # verified llama.cpp build + the recommended model
+lite-vega -managed   # boot the managed runtime (readiness proven by a real generation)
+lite-vega status     # runtime, staged models, launch policies
+```
+
+The managed runtime is a Go port of hermes-agent's `local_runtime` (MIT,
+Nous Research — see NOTICE): GGUF header parsing, VRAM/RAM budget math with a
+physics refusal when a model won't fit, a 64K→96K→144K context ladder, per-
+model launch policies (`presets.ini`), and a supervised `llama-server` router
+with crash restarts and idle VRAM reclamation.
+
 Flags: `-base-url` to point at a specific server (tailnet boxes count as
-local), `-model` to override the model, `-addr`, `-db`.
+local), `-model` to override the model, `-managed` to skip external-server
+detection, `-addr`, `-db`.
 
 lite-vega is a downstream product of [govega](https://github.com/everydev1618/govega)
 in the v39a-vega mold: the binary is wiring, the framework is upstream. See
