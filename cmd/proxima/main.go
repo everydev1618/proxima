@@ -9,8 +9,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -77,6 +80,7 @@ Run flags:
   -model      model id to use (default: first advertised)
   -managed    skip external-server detection; use the managed runtime
   -approve    tool approval gate: exec (default), all (+file writes), off
+  -mobile     phone pairing: LAN listener + token gate + QR (default true)
 `)
 }
 
@@ -90,6 +94,7 @@ func runCmd(args []string) error {
 	model := fs.String("model", "", "model id to use")
 	managed := fs.Bool("managed", false, "use the managed runtime even when an external server runs")
 	approve := fs.String("approve", "exec", "tool approval gate: exec (code-running tools), all (+file writes), off")
+	mobile := fs.Bool("mobile", true, "pair phones: listen on the LAN behind a pairing token and print a QR code")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -97,7 +102,27 @@ func runCmd(args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	endpoint, chosen, sup, err := resolveEndpoint(ctx, *baseURL, *model, *managed)
+	// Mobile pairing: fixed LAN address + persistent token, QR printed up
+	// front so the phone can drive everything that follows — including the
+	// first-run model download.
+	var setup *setupOpts
+	if *mobile {
+		if *addr == "" {
+			*addr = defaultMobileAddr
+		}
+		token, err := loadOrCreatePairingToken(localrt.VegaHome())
+		if err != nil {
+			return err
+		}
+		setup = &setupOpts{addr: *addr, token: token}
+		if _, port, err := net.SplitHostPort(*addr); err == nil {
+			printPairing(os.Stdout, port, token)
+		} else {
+			fmt.Fprintf(os.Stderr, "warn: cannot parse -addr %q for pairing QR\n", *addr)
+		}
+	}
+
+	endpoint, chosen, sup, err := resolveEndpoint(ctx, *baseURL, *model, *managed, setup)
 	if err != nil {
 		return err
 	}
@@ -142,11 +167,24 @@ func runCmd(args []string) error {
 	}
 
 	// Tool approval gate: a local model does not run shell commands on this
-	// machine without a human answering y.
+	// machine without a human answering y — on this terminal or a paired
+	// phone, whichever answers first.
+	var apprHub *approvalHub
+	if setup != nil {
+		apprHub = newApprovalHub()
+	}
 	if gated := approvalSets[*approve]; gated != nil {
 		if gate, ok := newApprover(); ok {
+			gate.hub = apprHub
 			interp.Tools().Use(gate.middleware(gated))
-			fmt.Printf("approval gate on (-approve=%s): %s prompt in this terminal\n", *approve, gateNames(gated))
+			surface := "this terminal"
+			if apprHub != nil {
+				surface = "this terminal or a paired phone"
+			}
+			fmt.Printf("approval gate on (-approve=%s): %s prompt on %s\n", *approve, gateNames(gated), surface)
+		} else if apprHub != nil {
+			interp.Tools().Use(newHubApprover(apprHub).middleware(gated))
+			fmt.Println("approval gate on: no terminal — prompts go to paired phones")
 		} else {
 			fmt.Fprintln(os.Stderr, "warn: approval gate DISABLED — no controlling terminal (run with -approve=off to silence)")
 		}
@@ -171,7 +209,44 @@ func runCmd(args []string) error {
 			FallbackModel: chosen,
 		},
 	}
-	return serve.New(interp, cfg).Start(ctx)
+	if setup != nil {
+		cfg.Middleware = []func(http.Handler) http.Handler{tokenMiddleware(setup.token)}
+	}
+	srv := serve.New(interp, cfg)
+	if setup != nil {
+		// The app's onboarding poller lands here once the real server is up.
+		srv.RegisterRoute("GET /api/v1/local/state", readyStateHandler(chosen, endpoint.kind))
+		srv.RegisterRoute("GET /api/v1/local/approvals", apprHub.handleList)
+		srv.RegisterRoute("GET /api/v1/local/approvals/stream", apprHub.handleStream)
+		srv.RegisterRoute("POST /api/v1/local/approvals/{id}", apprHub.handleResolve)
+	}
+	return srv.Start(ctx)
+}
+
+// defaultMobileAddr is the fixed mobile-mode listen address: a stable port so
+// a paired phone finds proxima again after restarts. -addr overrides.
+const defaultMobileAddr = "0.0.0.0:7769"
+
+// setupOpts carries mobile-mode pairing config into the boot path.
+type setupOpts struct {
+	addr  string
+	token string
+}
+
+// readyStateHandler answers the same /api/v1/local/state the setup server
+// serves, but from the running orchestrator: setup is over, go chat.
+func readyStateHandler(model, kind string) http.HandlerFunc {
+	hostname, _ := os.Hostname()
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"phase":    "ready",
+			"hostname": hostname,
+			"model":    model,
+			"server":   kind,
+			"version":  version,
+		})
+	}
 }
 
 // gateNames renders a gated set for the startup banner.
@@ -194,8 +269,9 @@ type endpoint struct {
 // resolveEndpoint picks, in order: the explicit -base-url, a detected
 // external server, the managed runtime over staged models. It returns the
 // endpoint, the model id, and the supervisor when the managed path booted
-// one (caller stops it on exit).
-func resolveEndpoint(ctx context.Context, baseURL, model string, forceManaged bool) (endpoint, string, *localrt.Supervisor, error) {
+// one (caller stops it on exit). A non-nil setup routes the first-run
+// bootstrap through the phone-reachable setup server.
+func resolveEndpoint(ctx context.Context, baseURL, model string, forceManaged bool, setup *setupOpts) (endpoint, string, *localrt.Supervisor, error) {
 	if baseURL != "" && !forceManaged {
 		if !localrt.IsLocalEndpoint(baseURL) {
 			fmt.Fprintf(os.Stderr, "warn: %s is not a local endpoint — proxima is built for local models\n", baseURL)
@@ -223,10 +299,18 @@ func resolveEndpoint(ctx context.Context, baseURL, model string, forceManaged bo
 	}
 
 	// Managed runtime over staged models. An empty machine gets the
-	// first-run offer: pull the starter model and go straight to chat.
+	// first-run offer: pull the starter model and go straight to chat. With
+	// mobile pairing on, the offer (and the whole catalog) is answerable
+	// from the phone too.
 	staged := localrt.StagedModelIDs()
 	if len(staged) == 0 {
-		id, err := bootstrapStarter(ctx)
+		var id string
+		var err error
+		if setup != nil {
+			id, err = bootstrapMobile(ctx, setup.addr, setup.token)
+		} else {
+			id, err = bootstrapStarter(ctx)
+		}
 		if err != nil {
 			return endpoint{}, "", nil, err
 		}
@@ -433,14 +517,21 @@ func pullHF(ctx context.Context, repo, quant, tag string, budget localrt.Hardwar
 // the variant's weights + companions. Used by `proxima pull` and the
 // first-run starter bootstrap.
 func installRuntimeAndModel(ctx context.Context, entry *localrt.CatalogEntry, variant localrt.QuantVariant, tag string) error {
+	return installModelWithProgress(ctx, entry, variant, tag, progressPrinter())
+}
+
+// installModelWithProgress is the same core with a caller-chosen progress
+// sink — the phone-led bootstrap tees progress to the terminal AND the
+// setup API's SSE stream.
+func installModelWithProgress(ctx context.Context, entry *localrt.CatalogEntry, variant localrt.QuantVariant, tag string, prog localrt.Progress) error {
 	backend := localrt.SelectBackend(localrt.DetectGPUVendor(), "")
 	fmt.Printf("installing llama.cpp %s (%s)...\n", tag, backend)
-	if _, err := localrt.EnsureRuntimeInstalled(tag, backend, nil, progressPrinter()); err != nil {
+	if _, err := localrt.EnsureRuntimeInstalled(tag, backend, nil, prog); err != nil {
 		return fmt.Errorf("runtime install: %w", err)
 	}
 	fmt.Printf("downloading %s (%.1f GB) from %s...\n", variant.ModelID(),
 		float64(entry.DownloadBytes(variant))/1e9, entry.Repo)
-	return localrt.DownloadModel(ctx, entry, variant, progressPrinter())
+	return localrt.DownloadModel(ctx, entry, variant, prog)
 }
 
 // progressPrinter renders one carriage-return progress line per stage/label.

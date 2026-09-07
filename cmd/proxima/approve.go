@@ -31,13 +31,14 @@ var approvalSets = map[string]map[string]bool{
 const promptTimeout = 120 * time.Second
 
 type approver struct {
-	in  io.Reader
+	in  io.Reader // nil when there is no controlling terminal (phone-only gate)
 	out io.Writer
 
 	mu      sync.Mutex // serializes prompts (tool calls run in parallel)
 	always  map[string]bool
 	timeout time.Duration
 	reader  *bufio.Reader
+	hub     *approvalHub // optional: mirrors prompts to paired phones
 }
 
 // newApprover wires the gate to the controlling terminal. ok=false when no
@@ -48,6 +49,12 @@ func newApprover() (*approver, bool) {
 		return nil, false
 	}
 	return &approver{in: tty, out: tty, always: map[string]bool{}, timeout: promptTimeout}, true
+}
+
+// newHubApprover builds a phone-only gate for headless runs: no terminal,
+// prompts answered exclusively through the approvals API.
+func newHubApprover(hub *approvalHub) *approver {
+	return &approver{out: os.Stderr, always: map[string]bool{}, timeout: promptTimeout, hub: hub}
 }
 
 // summarize renders the one param a human needs to judge the call.
@@ -63,48 +70,85 @@ func summarize(name string, params map[string]any) string {
 	return fmt.Sprintf("%v", params)
 }
 
-// allow prompts for one gated call. Answers: y (once), n (deny), a (always
-// for this tool, this session).
+// allow prompts for one gated call and blocks until the terminal, a paired
+// phone, or the timeout answers — whichever comes first. Terminal answers:
+// y (once), n (deny), a (always for this tool, this session).
 func (a *approver) allow(name string, params map[string]any) bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.always[name] {
 		return true
 	}
+	summary := summarize(name, params)
+
+	var pending *pendingApproval
+	var phoneCh chan bool // nil (blocks forever in select) without a hub
+	if a.hub != nil {
+		pending = a.hub.add(name, summary)
+		phoneCh = pending.result
+	}
+	// decide settles the outcome everywhere: clears the phone queue when the
+	// terminal or the timeout answered first (no-op if the phone already won).
+	decide := func(allowed bool) bool {
+		if pending != nil {
+			a.hub.resolve(pending.ID, allowed)
+		}
+		return allowed
+	}
+
+	ttyCh := a.promptTTY(name, summary)
+	select {
+	case ans := <-ttyCh:
+		if ans.err != nil {
+			fmt.Fprintln(a.out, "→ denied (input closed)")
+			return decide(false)
+		}
+		switch strings.ToLower(strings.TrimSpace(ans.line)) {
+		case "y", "yes":
+			return decide(true)
+		case "a", "always":
+			a.always[name] = true
+			return decide(true)
+		default:
+			return decide(false)
+		}
+	case allowed := <-phoneCh:
+		verdict := "denied"
+		if allowed {
+			verdict = "allowed"
+		}
+		fmt.Fprintf(a.out, "→ %s from phone\n", verdict)
+		return allowed
+	case <-time.After(a.timeout):
+		fmt.Fprintln(a.out, "→ denied (no answer)")
+		return decide(false)
+	}
+}
+
+type ttyAnswer struct {
+	line string
+	err  error
+}
+
+// promptTTY prints the prompt and reads one line off the terminal in the
+// background. Returns nil (a channel that never delivers) when the approver
+// has no terminal.
+func (a *approver) promptTTY(name, summary string) chan ttyAnswer {
+	if a.in == nil {
+		fmt.Fprintf(a.out, "\n┌─ approval: agent wants to run %s\n│  %s\n└─ waiting for the phone…\n", name, summary)
+		return nil
+	}
 	if a.reader == nil {
 		a.reader = bufio.NewReader(a.in)
 	}
 	fmt.Fprintf(a.out, "\n┌─ approval: agent wants to run %s\n│  %s\n└─ allow? [y]es / [n]o / [a]lways this session: ",
-		name, summarize(name, params))
-
-	type answer struct {
-		line string
-		err  error
-	}
-	ch := make(chan answer, 1)
+		name, summary)
+	ch := make(chan ttyAnswer, 1)
 	go func() {
 		line, err := a.reader.ReadString('\n')
-		ch <- answer{line, err}
+		ch <- ttyAnswer{line, err}
 	}()
-	select {
-	case ans := <-ch:
-		if ans.err != nil {
-			fmt.Fprintln(a.out, "→ denied (input closed)")
-			return false
-		}
-		switch strings.ToLower(strings.TrimSpace(ans.line)) {
-		case "y", "yes":
-			return true
-		case "a", "always":
-			a.always[name] = true
-			return true
-		default:
-			return false
-		}
-	case <-time.After(a.timeout):
-		fmt.Fprintln(a.out, "→ denied (no answer)")
-		return false
-	}
+	return ch
 }
 
 // middleware builds the govega tool middleware for one gated set.
