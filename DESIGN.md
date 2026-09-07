@@ -122,9 +122,16 @@ divergences from the Python original:
   truncates agent contexts) — port `query_ollama_num_ctx`.
 
 ### Phase 3 — harness ergonomics
-- **Tool-call approval gating** — the one hermes-vs-vega.md gap worth closing
-  first. An orchestrator running `exec` on your machine with an 8B model's
-  judgment wants a human gate.
+- **Tool-call approval gating — DONE.** `-approve` (default `exec`) gates
+  code-running tools behind a y/n/a terminal prompt; denials return a tool
+  error the model adapts to. Built on govega's `tools.ToolNameFromContext`
+  (upstream commit 229550c — closes one pre/post-tool-hook gap from
+  hermes-vs-vega.md).
+- **Grow-before-compact — DONE.** govega gained `ContextPressureHook`
+  (upstream bf21032): on window overflow, lite's `MaybeGrowWindow` grants the
+  next ladder rung, bounces the router (PreSpawn regenerates presets), proves
+  readiness, and the request retries with the conversation intact — govega
+  compacts only when growth declines.
 - Passive memory extraction moved to idle-time (extra generations are free
   locally but slow; don't block the turn).
 - Terminal REPL polish (govega `repl` exists; make it the front door).

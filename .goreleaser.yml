@@ -1,0 +1,48 @@
+version: 2
+
+project_name: lite-vega
+
+# NOTE: releases build against a TAGGED govega, not the local sibling —
+# switch go.mod's replace directive to a version requirement before tagging
+# (same discipline as v39a-vega's GOVEGA_REF pin).
+
+builds:
+  - id: lite-vega
+    main: ./cmd/lite-vega
+    binary: lite-vega
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: default
+    format: tar.gz
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+
+checksum:
+  name_template: checksums.txt
+
+brews:
+  - repository:
+      owner: everydev1618
+      name: homebrew-tap
+    directory: Formula
+    homepage: https://v3ga.dev
+    description: "Vega's agent orchestrator on local models only"
+    license: MIT
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
