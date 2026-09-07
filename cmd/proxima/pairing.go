@@ -113,6 +113,28 @@ func lanIPs() []string {
 	return out
 }
 
+// Half-block QR cells with FORCED polarity: dark modules on an explicit
+// black background, light modules as bright-white blocks. Explicit colors
+// keep the code scannable on light and dark terminal themes alike, and every
+// cell is exactly one column — mixing the double-width ANSI full-block chars
+// with the single-width ▀/▄ defaults shears the rows (the first release's
+// unscannable QR).
+const (
+	qrDarkDark   = "\033[40m \033[0m"
+	qrLightLight = "\033[97;40m█\033[0m"
+	qrDarkLight  = "\033[97;40m▄\033[0m" // top dark, bottom light
+	qrLightDark  = "\033[97;40m▀\033[0m" // top light, bottom dark
+)
+
+// writeQR renders payload as a compact, theme-proof terminal QR.
+func writeQR(out io.Writer, payload string) {
+	qrterminal.GenerateWithConfig(payload, qrterminal.Config{
+		Level: qrterminal.L, Writer: out, HalfBlocks: true, QuietZone: 2,
+		BlackChar: qrDarkDark, WhiteChar: qrLightLight,
+		BlackWhiteChar: qrDarkLight, WhiteBlackChar: qrLightDark,
+	})
+}
+
 // printPairing renders the pairing block: a scannable QR plus a manual
 // fallback for phones without cameras pointed at terminals.
 func printPairing(out io.Writer, port, token string) {
@@ -122,11 +144,7 @@ func printPairing(out io.Writer, port, token string) {
 		return
 	}
 	host, _ := os.Hostname()
-	fmt.Fprintf(out, "\nPair your phone (Proxima app → scan):\n\n")
-	qrterminal.GenerateWithConfig(pairURL(ips[0], port, token, host), qrterminal.Config{
-		Level: qrterminal.L, Writer: out,
-		BlackChar: qrterminal.BLACK, WhiteChar: qrterminal.WHITE,
-		HalfBlocks: true, QuietZone: 2,
-	})
-	fmt.Fprintf(out, "\n  or enter manually — host %s  port %s\n  token %s\n\n", ips[0], port, token)
+	fmt.Fprintf(out, "\nPair your phone — scan with the Proxima app:\n\n")
+	writeQR(out, pairURL(ips[0], port, token, host))
+	fmt.Fprintf(out, "\n  manual entry — host %s  port %s\n  token %s\n\n", ips[0], port, token)
 }

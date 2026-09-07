@@ -1,12 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestLoadOrCreatePairingToken(t *testing.T) {
@@ -100,5 +103,29 @@ func TestLanIPs(t *testing.T) {
 		if strings.HasPrefix(ip, "127.") {
 			t.Fatalf("lanIPs returned loopback %q", ip)
 		}
+	}
+}
+
+var ansiRE = regexp.MustCompile("\x1b\\[[0-9;]*m")
+
+// TestWriteQRSquare guards the shipped-broken QR: mixed-width cell chars
+// shear the rows and the code stops scanning. Every rendered line must be
+// the same width, one terminal column per cell, narrow enough for 80 cols.
+func TestWriteQRSquare(t *testing.T) {
+	out := &bytes.Buffer{}
+	writeQR(out, pairURL("192.168.1.10", "7769", strings.Repeat("a", 64), "mbp"))
+	plain := strings.TrimRight(ansiRE.ReplaceAllString(out.String(), ""), "\n")
+	lines := strings.Split(plain, "\n")
+	if len(lines) < 12 {
+		t.Fatalf("QR suspiciously short: %d lines", len(lines))
+	}
+	width := utf8.RuneCountInString(lines[0])
+	for i, l := range lines {
+		if got := utf8.RuneCountInString(l); got != width {
+			t.Fatalf("line %d is %d cols, line 0 is %d — QR is sheared", i, got, width)
+		}
+	}
+	if width > 60 {
+		t.Errorf("QR is %d cols wide — must fit an 80-col terminal", width)
 	}
 }

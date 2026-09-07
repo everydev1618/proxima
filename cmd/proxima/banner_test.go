@@ -45,3 +45,27 @@ func TestBootBannerAgentsLine(t *testing.T) {
 		t.Errorf("bootBanner[1] = %q, want %q", lines[1], want)
 	}
 }
+
+func TestWelcomeLines(t *testing.T) {
+	lines := welcomeLines("http://localhost:7769", true, true, "/x/proxima.log")
+	joined := strings.Join(lines, "\n")
+	for _, want := range []string{
+		"http://localhost:7769", "opening in your browser", "proxima pair", "/x/proxima.log",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("welcome card missing %q:\n%s", want, joined)
+		}
+	}
+	// The chat line leads — it is the answer to "what do I do now".
+	if !strings.HasPrefix(lines[0], "chat — ") {
+		t.Errorf("first line is not the chat address: %q", lines[0])
+	}
+
+	// Headless, no mobile, no log file: no browser claim, no phone line.
+	joined = strings.Join(welcomeLines("http://localhost:7769", false, false, ""), "\n")
+	for _, banned := range []string{"opening", "proxima pair", "logs"} {
+		if strings.Contains(joined, banned) {
+			t.Errorf("minimal card must not mention %q:\n%s", banned, joined)
+		}
+	}
+}

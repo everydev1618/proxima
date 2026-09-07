@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -47,6 +48,8 @@ func main() {
 		err = pullCmd(args)
 	case "status":
 		err = statusCmd(args)
+	case "pair":
+		err = pairCmd(args)
 	case "version":
 		fmt.Println("proxima", version)
 	case "help", "-h", "--help":
@@ -71,6 +74,7 @@ Usage:
   proxima pull [id]       install the runtime + download a model (default: recommended)
                           id can be any HF GGUF repo: hf:<org>/<repo>[:<quant>]
   proxima status          managed runtime status
+  proxima pair            show the phone-pairing QR (Proxima app)
   proxima version
 
 Run flags:
@@ -80,7 +84,8 @@ Run flags:
   -model      model id to use (default: first advertised)
   -managed    skip external-server detection; use the managed runtime
   -approve    tool approval gate: exec (default), all (+file writes), off
-  -mobile     phone pairing: LAN listener + token gate + QR (default true)
+  -mobile     phone pairing: LAN listener + token gate (default true)
+  -verbose    agent internals on the terminal instead of ~/.vega/logs/proxima.log
 `)
 }
 
@@ -94,7 +99,8 @@ func runCmd(args []string) error {
 	model := fs.String("model", "", "model id to use")
 	managed := fs.Bool("managed", false, "use the managed runtime even when an external server runs")
 	approve := fs.String("approve", "exec", "tool approval gate: exec (code-running tools), all (+file writes), off")
-	mobile := fs.Bool("mobile", true, "pair phones: listen on the LAN behind a pairing token and print a QR code")
+	mobile := fs.Bool("mobile", true, "pair phones: listen on the LAN behind a pairing token")
+	verbose := fs.Bool("verbose", false, "print agent internals to the terminal instead of the log file")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -102,9 +108,21 @@ func runCmd(args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// Mobile pairing: fixed LAN address + persistent token, QR printed up
-	// front so the phone can drive everything that follows — including the
-	// first-run model download.
+	// Agent internals go to a file — the terminal is for the person. The
+	// phone-led first run renders a QR and a download bar; twenty INFO lines
+	// between them is how a first impression dies.
+	logPath := ""
+	if !*verbose {
+		if lf, path, err := bootLog(); err == nil {
+			slog.SetDefault(slog.New(slog.NewTextHandler(lf, nil)))
+			defer lf.Close()
+			logPath = path
+		}
+	}
+
+	// Mobile pairing: fixed LAN address + persistent token. The QR prints on
+	// demand (`proxima pair`) and in the phone-led first run — not on every
+	// boot.
 	var setup *setupOpts
 	if *mobile {
 		if *addr == "" {
@@ -115,11 +133,6 @@ func runCmd(args []string) error {
 			return err
 		}
 		setup = &setupOpts{addr: *addr, token: token}
-		if _, port, err := net.SplitHostPort(*addr); err == nil {
-			printPairing(os.Stdout, port, token)
-		} else {
-			fmt.Fprintf(os.Stderr, "warn: cannot parse -addr %q for pairing QR\n", *addr)
-		}
 	}
 
 	endpoint, chosen, sup, err := resolveEndpoint(ctx, *baseURL, *model, *managed, setup)
@@ -166,6 +179,10 @@ func runCmd(args []string) error {
 		return fmt.Errorf("creating vega home: %w", err)
 	}
 
+	for _, line := range bootBanner(chosen, endpoint.origin) {
+		fmt.Println(line)
+	}
+
 	// Tool approval gate: a local model does not run shell commands on this
 	// machine without a human answering y — on this terminal or a paired
 	// phone, whichever answers first.
@@ -179,12 +196,12 @@ func runCmd(args []string) error {
 			interp.Tools().Use(gate.middleware(gated))
 			surface := "this terminal"
 			if apprHub != nil {
-				surface = "this terminal or a paired phone"
+				surface = "this terminal or your phone"
 			}
-			fmt.Printf("approval gate on (-approve=%s): %s prompt on %s\n", *approve, gateNames(gated), surface)
+			fmt.Printf("approvals — %s ask first, on %s\n", gateNames(gated), surface)
 		} else if apprHub != nil {
 			interp.Tools().Use(newHubApprover(apprHub).middleware(gated))
-			fmt.Println("approval gate on: no terminal — prompts go to paired phones")
+			fmt.Println("approvals — no terminal; prompts go to paired phones")
 		} else {
 			fmt.Fprintln(os.Stderr, "warn: approval gate DISABLED — no controlling terminal (run with -approve=off to silence)")
 		}
@@ -192,7 +209,17 @@ func runCmd(args []string) error {
 		return fmt.Errorf("unknown -approve mode %q (exec, all, off)", *approve)
 	}
 
-	for _, line := range bootBanner(chosen, endpoint.origin) {
+	// The "what now" card. With a fixed addr the chat URL is known before the
+	// server starts; the browser opens once it actually answers.
+	chatURL := ""
+	if _, port, err := net.SplitHostPort(*addr); err == nil {
+		chatURL = "http://localhost:" + port
+	}
+	interactive := hasTTY()
+	if chatURL != "" && interactive {
+		openWhenReady(ctx, chatURL)
+	}
+	for _, line := range welcomeLines(chatURL, interactive, setup != nil, logPath) {
 		fmt.Println(line)
 	}
 
@@ -249,6 +276,51 @@ func readyStateHandler(model, kind string) http.HandlerFunc {
 			"version":  version,
 		})
 	}
+}
+
+// pairCmd shows the pairing QR on demand. The token is per-machine and the
+// mobile port is stable, so pairing works whether or not proxima is running.
+func pairCmd(args []string) error {
+	fs := flag.NewFlagSet("pair", flag.ExitOnError)
+	addr := fs.String("addr", defaultMobileAddr, "the -addr proxima runs with")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	_, port, err := net.SplitHostPort(*addr)
+	if err != nil {
+		return fmt.Errorf("cannot parse -addr %q: %w", *addr, err)
+	}
+	token, err := loadOrCreatePairingToken(localrt.VegaHome())
+	if err != nil {
+		return err
+	}
+	printPairing(os.Stdout, port, token)
+	return nil
+}
+
+// bootLog opens the terminal-quiet destination for agent internals.
+func bootLog() (*os.File, string, error) {
+	dir := filepath.Join(localrt.VegaHome(), "logs")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, "", err
+	}
+	path := filepath.Join(dir, "proxima.log")
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return nil, "", err
+	}
+	return f, path, nil
+}
+
+// hasTTY reports whether a controlling terminal exists — the difference
+// between a person watching and a service unit.
+func hasTTY() bool {
+	tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
+	if err != nil {
+		return false
+	}
+	tty.Close()
+	return true
 }
 
 // gateNames renders a gated set for the startup banner.

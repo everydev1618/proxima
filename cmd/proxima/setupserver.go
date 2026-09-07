@@ -304,6 +304,12 @@ func bootstrapMobile(ctx context.Context, addr, token string) (string, error) {
 	go srv.Serve(ln)
 	defer srv.Close()
 
+	// The phone must be able to pair BEFORE consent — it may be the only
+	// surface driving this setup — so the QR prints here, while we wait.
+	if _, port, err := net.SplitHostPort(addr); err == nil {
+		printPairing(os.Stdout, port, token)
+	}
+
 	// The terminal path still works: same starter offer, first answer wins.
 	go func() {
 		entry, choice := localrt.StarterEntry(localrt.Catalog(), localrt.ProbeBudget(true))
