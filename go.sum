@@ -44,6 +44,8 @@ github.com/docker/go-units v0.5.0 h1:69rxXcBk27SvSaaxTtLh/8llcHD8vYHT7WSdRZ/jvr4
 github.com/docker/go-units v0.5.0/go.mod h1:fgPhTUdO+D/Jk86RDLlptpiXQzgHJF7gydDDbaIK4Dk=
 github.com/dustin/go-humanize v1.0.1 h1:GzkhY7T5VNhEkwH0PVJgjz+fX1rhBrR7pRT3mDkpeCY=
 github.com/dustin/go-humanize v1.0.1/go.mod h1:Mu1zIs6XwVuF/gI1OepvI0qD18qycQx+mFykh5fBlto=
+github.com/everydev1618/govega v0.9.0 h1:DQ7fodIFweyF+cXljshKUHUxMZA79rVT73KQKgptK3Y=
+github.com/everydev1618/govega v0.9.0/go.mod h1:nFrnSa+mi/3N8gm/9tTL/ZAmMNUPcxtWGcnCgYqUnrA=
 github.com/everydev1618/vega-population v0.1.0 h1:gDwft0qTqHTiE9X8Lljr/TbYTnQ/N7Zlu2xSuhqihOc=
 github.com/everydev1618/vega-population v0.1.0/go.mod h1:SGx3PqxUd2L7oFuw5U1wQrOPTgQOEoobbcVgQke903o=
 github.com/felixge/httpsnoop v1.0.4 h1:NFTV2Zj1bL4mc9sqWACXbQFVBBg2W3GPvqp8/ESS2Wg=

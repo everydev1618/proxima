@@ -2,7 +2,7 @@ module github.com/everydev1618/proxima-vega
 
 go 1.25.7
 
-require github.com/everydev1618/govega v0.0.0
+require github.com/everydev1618/govega v0.9.0
 
 require (
 	github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c // indirect
@@ -74,5 +74,3 @@ require (
 	modernc.org/sqlite v1.49.1 // indirect
 	rsc.io/pdf v0.1.1 // indirect
 )
-
-replace github.com/everydev1618/govega => ../govega
