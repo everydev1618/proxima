@@ -2,7 +2,10 @@ module github.com/everydev1618/proxima-vega
 
 go 1.25.7
 
-require github.com/everydev1618/govega v0.9.0
+require (
+	github.com/everydev1618/govega v0.9.1
+	github.com/mdp/qrterminal/v3 v3.2.1
+)
 
 require (
 	github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c // indirect
@@ -36,7 +39,6 @@ require (
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/mattn/go-isatty v0.0.21 // indirect
-	github.com/mdp/qrterminal/v3 v3.2.1 // indirect
 	github.com/mfridman/interpolate v0.0.2 // indirect
 	github.com/microsoft/go-mssqldb v1.9.8 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect

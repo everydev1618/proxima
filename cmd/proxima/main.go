@@ -192,7 +192,9 @@ func runCmd(args []string) error {
 		return fmt.Errorf("unknown -approve mode %q (exec, all, off)", *approve)
 	}
 
-	fmt.Printf("proxima %s — %s at %s, model %s\n", version, endpoint.kind, endpoint.origin, chosen)
+	for _, line := range bootBanner(chosen, endpoint.origin) {
+		fmt.Println(line)
+	}
 
 	cfg := serve.Config{
 		Version: version,
