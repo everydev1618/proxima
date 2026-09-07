@@ -1,4 +1,4 @@
-// lite-vega boots govega's orchestrator (Iris) + builder (Hera) against a
+// proxima boots govega's orchestrator (Iris) + builder (Hera) against a
 // LOCAL model server — no API keys, no config. It uses a model server already
 // running on your machine (Ollama, LM Studio, llama.cpp, vLLM), or manages
 // its own llama.cpp runtime over models pulled from the curated catalog.
@@ -23,7 +23,7 @@ import (
 	"github.com/everydev1618/govega/dsl"
 	"github.com/everydev1618/govega/serve"
 
-	"github.com/everydev1618/lite-vega/localrt"
+	"github.com/everydev1618/proxima-vega/localrt"
 )
 
 var version = "dev"
@@ -45,29 +45,29 @@ func main() {
 	case "status":
 		err = statusCmd(args)
 	case "version":
-		fmt.Println("lite-vega", version)
+		fmt.Println("proxima", version)
 	case "help", "-h", "--help":
 		printUsage()
 	default:
-		fmt.Fprintf(os.Stderr, "lite-vega: unknown command %q\n\n", cmd)
+		fmt.Fprintf(os.Stderr, "proxima: unknown command %q\n\n", cmd)
 		printUsage()
 		os.Exit(2)
 	}
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "lite-vega: %v\n", err)
+		fmt.Fprintf(os.Stderr, "proxima: %v\n", err)
 		os.Exit(1)
 	}
 }
 
 func printUsage() {
-	fmt.Print(`lite-vega — vega's orchestrator on local models only
+	fmt.Print(`proxima — vega's orchestrator on local models only
 
 Usage:
-  lite-vega [run] [flags]   start the orchestrator (default)
-  lite-vega models          show the model catalog with what fits THIS machine
-  lite-vega pull [id]       install the runtime + download a model (default: recommended)
-  lite-vega status          managed runtime status
-  lite-vega version
+  proxima [run] [flags]   start the orchestrator (default)
+  proxima models          show the model catalog with what fits THIS machine
+  proxima pull [id]       install the runtime + download a model (default: recommended)
+  proxima status          managed runtime status
+  proxima version
 
 Run flags:
   -addr       HTTP listen address (default: auto-assign free port)
@@ -127,7 +127,7 @@ func runCmd(args []string) error {
 	}
 
 	doc := &dsl.Document{
-		Name:      "lite-vega",
+		Name:      "proxima",
 		Agents:    map[string]*dsl.Agent{},
 		Workflows: map[string]*dsl.Workflow{},
 	}
@@ -153,7 +153,7 @@ func runCmd(args []string) error {
 		return fmt.Errorf("unknown -approve mode %q (exec, all, off)", *approve)
 	}
 
-	fmt.Printf("lite-vega %s — %s at %s, model %s\n", version, endpoint.kind, endpoint.origin, chosen)
+	fmt.Printf("proxima %s — %s at %s, model %s\n", version, endpoint.kind, endpoint.origin, chosen)
 
 	cfg := serve.Config{
 		Version: version,
@@ -197,7 +197,7 @@ type endpoint struct {
 func resolveEndpoint(ctx context.Context, baseURL, model string, forceManaged bool) (endpoint, string, *localrt.Supervisor, error) {
 	if baseURL != "" && !forceManaged {
 		if !localrt.IsLocalEndpoint(baseURL) {
-			fmt.Fprintf(os.Stderr, "warn: %s is not a local endpoint — lite-vega is built for local models\n", baseURL)
+			fmt.Fprintf(os.Stderr, "warn: %s is not a local endpoint — proxima is built for local models\n", baseURL)
 		}
 		t := localrt.DetectServerType(ctx, baseURL)
 		if t == localrt.ServerUnknown {
@@ -322,7 +322,7 @@ func modelsCmd(args []string) error {
 	}
 	if rec != nil {
 		fmt.Printf("\n▸ recommended for this machine: %s (%s)\n", rec.Entry.ID, rec.Reason)
-		fmt.Printf("  lite-vega pull %s\n", rec.Entry.ID)
+		fmt.Printf("  proxima pull %s\n", rec.Entry.ID)
 	} else {
 		fmt.Println("\nNothing in the catalog fits this machine.")
 	}
@@ -346,12 +346,12 @@ func pullCmd(args []string) error {
 	if fs.NArg() > 0 {
 		entry = localrt.EntryByID(entries, fs.Arg(0))
 		if entry == nil {
-			return fmt.Errorf("unknown model %q — see `lite-vega models`", fs.Arg(0))
+			return fmt.Errorf("unknown model %q — see `proxima models`", fs.Arg(0))
 		}
 	} else {
 		rec := localrt.RecommendedEntry(entries, budget)
 		if rec == nil {
-			return fmt.Errorf("nothing in the catalog fits this machine — see `lite-vega models`")
+			return fmt.Errorf("nothing in the catalog fits this machine — see `proxima models`")
 		}
 		entry = rec.Entry
 		fmt.Printf("no model named; pulling the recommendation for this machine: %s\n", entry.ID)
@@ -375,7 +375,7 @@ func pullCmd(args []string) error {
 	if err := localrt.DownloadModel(ctx, entry, variant, progressPrinter()); err != nil {
 		return err
 	}
-	fmt.Printf("\n%s staged. Start with: lite-vega -managed -model %s\n", variant.ModelID(), variant.ModelID())
+	fmt.Printf("\n%s staged. Start with: proxima -managed -model %s\n", variant.ModelID(), variant.ModelID())
 	return nil
 }
 
@@ -409,7 +409,7 @@ func statusCmd(args []string) error {
 	fmt.Printf("vega home:      %s\n", localrt.VegaHome())
 	tags := localrt.InstalledTags()
 	if len(tags) == 0 {
-		fmt.Println("runtime:        not installed (lite-vega pull)")
+		fmt.Println("runtime:        not installed (proxima pull)")
 	} else {
 		fmt.Printf("runtime:        llama.cpp %s installed\n", strings.Join(tags, ", "))
 	}
@@ -445,9 +445,9 @@ const noServerHelp = `Checked the usual suspects:
   llama.cpp  http://127.0.0.1:8080
   LiteLLM    http://127.0.0.1:4000
 
-Either start one of those, or let lite-vega manage its own:
-  lite-vega models        see what fits this machine
-  lite-vega pull          download the recommended model + runtime
+Either start one of those, or let proxima manage its own:
+  proxima models        see what fits this machine
+  proxima pull          download the recommended model + runtime
 `
 
 func noModelHelp(t localrt.ServerType) string {
@@ -455,8 +455,8 @@ func noModelHelp(t localrt.ServerType) string {
 	case localrt.ServerOllama:
 		return "Pull one first, e.g.: ollama pull qwen3\n"
 	case localrt.ServerLMStudio:
-		return "Load a model in LM Studio, then run lite-vega again.\n"
+		return "Load a model in LM Studio, then run proxima again.\n"
 	default:
-		return "Load a model on the server, then run lite-vega again.\n"
+		return "Load a model on the server, then run proxima again.\n"
 	}
 }

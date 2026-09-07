@@ -1,5 +1,5 @@
 // Package localrt detects and describes local model servers (Ollama,
-// LM Studio, llama.cpp, vLLM) so lite-vega can wire govega's OpenAI-compat
+// LM Studio, llama.cpp, vLLM) so proxima can wire govega's OpenAI-compat
 // backend to whatever is already running on the user's machine.
 //
 // The probe strategy is a port of hermes-agent's detect_local_server_type

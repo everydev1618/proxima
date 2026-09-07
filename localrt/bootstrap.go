@@ -3,7 +3,7 @@
 // (MIT, Nous Research — see NOTICE).
 //
 // Divergence from the original: no cross-process adoption of an incumbent
-// server. lite-vega is typically the only supervisor on the machine, so a
+// server. proxima is typically the only supervisor on the machine, so a
 // live state-file server is stopped and replaced by a fresh boot with
 // regenerated presets — sessions ride through on the stable port + persisted
 // key exactly as they do across a supervised restart.
@@ -20,7 +20,7 @@ import (
 
 // EnsureManagedRuntime boots the managed llama-server over the staged models
 // and returns its supervisor. Preconditions: at least one staged model and
-// one installed runtime tag (callers surface `lite-vega pull` guidance
+// one installed runtime tag (callers surface `proxima pull` guidance
 // otherwise).
 func EnsureManagedRuntime(tag string) (*Supervisor, error) {
 	staged := StagedModels()
@@ -38,7 +38,7 @@ func EnsureManagedRuntime(tag string) (*Supervisor, error) {
 	installed := InstalledTags()
 	if !contains(installed, tag) {
 		if len(installed) == 0 {
-			return nil, fmt.Errorf("no llama.cpp build installed; run `lite-vega pull` first")
+			return nil, fmt.Errorf("no llama.cpp build installed; run `proxima pull` first")
 		}
 		slog.Info("configured runtime tag not installed; serving newest installed",
 			"configured", tag, "serving", installed[0])
@@ -50,7 +50,7 @@ func EnsureManagedRuntime(tag string) (*Supervisor, error) {
 	}
 	installDir := plan.InstallDir()
 	if !ManifestVerified(installDir + "/manifest.json") {
-		return nil, fmt.Errorf("runtime %s/%s not verified; run `lite-vega pull` to (re)install", tag, backend)
+		return nil, fmt.Errorf("runtime %s/%s not verified; run `proxima pull` to (re)install", tag, backend)
 	}
 
 	// A previous supervisor (this or another process) may still hold the

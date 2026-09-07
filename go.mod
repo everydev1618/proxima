@@ -1,4 +1,4 @@
-module github.com/everydev1618/lite-vega
+module github.com/everydev1618/proxima-vega
 
 go 1.25.7
 

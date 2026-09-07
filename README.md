@@ -1,4 +1,4 @@
-# lite-vega
+# proxima
 
 Vega's orchestrator on **local models only**. No API keys, no config: it finds
 the model server already running on your machine (Ollama, LM Studio,
@@ -6,18 +6,18 @@ llama.cpp, vLLM), picks a model, and boots Iris + Hera with tools, memory, and
 the dashboard.
 
 ```
-lite-vega
-# lite-vega dev — ollama at http://127.0.0.1:11434, model qwen3:30b
+proxima
+# proxima dev — ollama at http://127.0.0.1:11434, model qwen3:30b
 # Dashboard: http://localhost:60726
 ```
 
-No server running? lite-vega manages its own llama.cpp:
+No server running? proxima manages its own llama.cpp:
 
 ```
-lite-vega models     # the curated catalog, priced against THIS machine's memory
-lite-vega pull       # verified llama.cpp build + the recommended model
-lite-vega -managed   # boot the managed runtime (readiness proven by a real generation)
-lite-vega status     # runtime, staged models, launch policies
+proxima models     # the curated catalog, priced against THIS machine's memory
+proxima pull       # verified llama.cpp build + the recommended model
+proxima -managed   # boot the managed runtime (readiness proven by a real generation)
+proxima status     # runtime, staged models, launch policies
 ```
 
 The managed runtime is a Go port of hermes-agent's `local_runtime` (MIT,
@@ -30,7 +30,7 @@ Flags: `-base-url` to point at a specific server (tailnet boxes count as
 local), `-model` to override the model, `-managed` to skip external-server
 detection, `-addr`, `-db`.
 
-lite-vega is a downstream product of [govega](https://github.com/everydev1618/govega)
+proxima is a downstream product of [govega](https://github.com/everydev1618/govega)
 in the v39a-vega mold: the binary is wiring, the framework is upstream. See
 `DESIGN.md` for the roadmap (managed llama.cpp runtime under OTP supervision,
 hardware-aware model catalog, approval gating) and the list of upstream govega
@@ -39,7 +39,7 @@ changes it depends on.
 ## Build
 
 ```
-go build ./cmd/lite-vega
+go build ./cmd/proxima
 go test ./...
 ```
 

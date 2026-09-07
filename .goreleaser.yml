@@ -1,15 +1,15 @@
 version: 2
 
-project_name: lite-vega
+project_name: proxima
 
 # NOTE: releases build against a TAGGED govega, not the local sibling —
 # switch go.mod's replace directive to a version requirement before tagging
 # (same discipline as v39a-vega's GOVEGA_REF pin).
 
 builds:
-  - id: lite-vega
-    main: ./cmd/lite-vega
-    binary: lite-vega
+  - id: proxima
+    main: ./cmd/proxima
+    binary: proxima
     ldflags:
       - -s -w
       - -X main.version={{.Version}}

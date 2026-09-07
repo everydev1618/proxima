@@ -1,4 +1,4 @@
-# lite-vega — Design
+# proxima — Design
 
 A super-light harness around **local-only models**: vega-style tool calling,
 memory, and orchestration, from download to running orchestrator with zero API
@@ -7,19 +7,21 @@ NousResearch's `hermes-agent` (2026-09-07).
 
 ## The shape (per POSITIONING.md)
 
-**lite-vega is a downstream product, not a fork.** Same rule as every flavor:
+**proxima is a downstream product, not a fork.** Same rule as every flavor:
 imports govega, never the reverse. The model to copy is v39a-vega's own README:
 *"contains almost no code — the binary's job is to wire them together at
 startup."* This repo is:
 
-- `cmd/lite-vega/` — wiring in the v39a-vega shape (~1k lines when done)
+- `cmd/proxima/` — wiring in the v39a-vega shape (~1k lines when done)
 - `localrt/` — the one genuinely new package: local-runtime detection and
   (later) management
 
-Naming: the tree convention is `<flavor>-vega` (v39a-vega, apex-vega,
-galley-vega), so this is **lite-vega**. Do NOT ship under "vega-lite" — that
-name is taken by the well-known visualization grammar (vega.github.io/vega-lite)
-and would be an SEO/identity disaster.
+Naming: **Proxima** — Proxima Centauri is the nearest star; this is the
+nearest possible Vega, running on your own hardware. The repo/module follows
+the tree convention as `proxima-vega`; the binary is `proxima`. Do NOT ship
+under "vega-lite" (taken by the visualization grammar at
+vega.github.io/vega-lite) or "altair" (its Python API) — both would be
+SEO/identity disasters.
 
 ## Why this is 80% done already
 
@@ -46,7 +48,7 @@ binary.
 
 1. **Kill the API-key gate for local.** `requireAPIKey()` in `cmd/vega/serve.go`
    blocks the local story. If a local endpoint is configured or detected: no
-   key, ever. (lite-vega's own main bypasses the CLI, so this doesn't block us —
+   key, ever. (proxima's own main bypasses the CLI, so this doesn't block us —
    but it should be fixed for `vega serve` users too.)
 2. **First-class local provider in `llm/factory.go` + `vega init`.** Init today
    prompts for Anthropic + Telegram only. It should probe for running servers
@@ -72,7 +74,7 @@ binary.
    is local. Small context windows make compaction quality matter more, not
    less.
 
-## What lite-vega builds (product-shaped)
+## What proxima builds (product-shaped)
 
 ### Phase 1 — detect & wire (this scaffold)
 - `localrt.Detect`: probe well-known local endpoints; identify server type the
@@ -84,7 +86,7 @@ binary.
   DNS, **and Tailscale CGNAT 100.64/10** — a trusted Ollama box over a tailnet
   is "local" for timeout/trust purposes.
 - `localrt.ListModels`: OpenAI-compat `/v1/models`.
-- `cmd/lite-vega`: probe → pick model → set env → empty `dsl.Document` →
+- `cmd/proxima`: probe → pick model → set env → empty `dsl.Document` →
   `dsl.NewInterpreter(doc, dsl.WithLazySpawn())` → `serve.New` → Iris + Hera
   on the local model. Friendly per-server-type guidance when nothing is
   running or no model is loaded.
@@ -97,14 +99,15 @@ divergences from the Python original:
   box must not fight over a port.
 - No CUDA-driver-API unified-pool probe (needs dlopen); NVIDIA carve-out
   devices budget from the smi number, which errs safe. Revisit with purego.
-- No cross-process adoption of an incumbent server: lite-vega stops the
+- No cross-process adoption of an incumbent server: proxima stops the
   state-file server and boots fresh with regenerated presets (sessions ride
   through on the stable port + persisted key).
 - No in-memory catalog refresh from the repo: the embedded catalog.json is
   the truth until a release updates it.
-- Growth execution (`MaybeGrowWindow`) is mechanism-only for now: the
-  occupancy trigger belongs at govega's compaction gate (upstream change #6's
-  natural home) — persistence, decision gates, and preset restore are all in.
+- Growth executes from govega's `ContextPressureHook` (grow-before-compact,
+  see Phase 3) rather than hermes' compression-gate callsite — occupancy is
+  confirmed by the server's own overflow refusal instead of a client-side
+  token count.
 - Verified llama.cpp binary download per GPU backend (cuda/metal/vulkan/cpu),
   SHA256-checked, into `~/.vega/runtimes/llamacpp/<tag>/`.
 - GGUF header parsing; VRAM/RAM budget probe; KV-cache byte math with a
@@ -128,7 +131,7 @@ divergences from the Python original:
   (upstream commit 229550c — closes one pre/post-tool-hook gap from
   hermes-vs-vega.md).
 - **Grow-before-compact — DONE.** govega gained `ContextPressureHook`
-  (upstream bf21032): on window overflow, lite's `MaybeGrowWindow` grants the
+  (upstream bf21032): on window overflow, proxima's `MaybeGrowWindow` grants the
   next ladder rung, bounces the router (PreSpawn regenerates presets), proves
   readiness, and the request retries with the conversation intact — govega
   compacts only when growth declines.
@@ -149,8 +152,8 @@ plus exact token counts.
 ## Download-to-gorgeous target
 
 ```
-brew install everydev1618/tap/lite-vega
-lite-vega
+brew install everydev1618/tap/proxima
+proxima
   → probes hardware + running local servers
   → LM Studio with qwen3 loaded? use it. Nothing running? offer catalog download (Phase 2)
   → readiness proven by an actual generation

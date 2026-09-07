@@ -22,7 +22,7 @@ import (
 	"time"
 )
 
-// DefaultRuntimeTag is the pinned llama.cpp release tag; bumped by lite-vega
+// DefaultRuntimeTag is the pinned llama.cpp release tag; bumped by proxima
 // releases after validation. (Same tag hermes-agent currently ships.)
 const DefaultRuntimeTag = "b10679"
 
