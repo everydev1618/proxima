@@ -10,8 +10,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
@@ -225,10 +227,67 @@ type Progress func(stage string, done, total int64, label string)
 
 var downloadClient = &http.Client{Timeout: 30 * time.Minute}
 
-// downloadFile streams url -> dest with a .part temp file. progress ticks per
-// chunk (total 0 when the server sends no Content-Length) — a
-// several-hundred-MB archive must never look hung.
+// downloadRetries bounds consecutive attempts that make NO progress; an
+// attempt that grows the .part resets the budget, so a flaky link that
+// keeps inching forward never dies, while a dead one gives up promptly.
+const downloadRetries = 5
+
+// downloadRetryDelay is the base backoff (doubled per barren attempt, capped
+// at 30s). A var so tests shrink it.
+var downloadRetryDelay = 2 * time.Second
+
+// downloadFile streams url -> dest, retrying transient failures by resuming
+// the .part via Range. HTTP 4xx is permanent and fails immediately.
 func downloadFile(url, dest string, progress func(done, total int64)) error {
+	tmp := dest + ".part"
+	partSize := func() int64 {
+		info, err := os.Stat(tmp)
+		if err != nil {
+			return 0
+		}
+		return info.Size()
+	}
+	left, delay := downloadRetries, downloadRetryDelay
+	for {
+		before := partSize()
+		err := downloadFileOnce(url, dest, progress)
+		if err == nil {
+			return nil
+		}
+		var status *httpStatusError
+		if errors.As(err, &status) && status.code >= 400 && status.code < 500 {
+			return err
+		}
+		if partSize() > before {
+			left, delay = downloadRetries, downloadRetryDelay
+		} else {
+			left--
+		}
+		if left <= 0 {
+			return err
+		}
+		slog.Warn("download interrupted; resuming", "err", err, "in", delay)
+		time.Sleep(delay)
+		if delay *= 2; delay > 30*time.Second {
+			delay = 30 * time.Second
+		}
+	}
+}
+
+// httpStatusError is a non-2xx download response; 4xx never retries.
+type httpStatusError struct {
+	url    string
+	status string
+	code   int
+}
+
+func (e *httpStatusError) Error() string { return fmt.Sprintf("GET %s: %s", e.url, e.status) }
+
+// downloadFileOnce is a single attempt: stream url -> dest with a .part temp
+// file, resuming any existing partial via Range. progress ticks per chunk
+// (total 0 when the server sends no Content-Length) — a several-hundred-MB
+// archive must never look hung.
+func downloadFileOnce(url, dest string, progress func(done, total int64)) error {
 	tmp := dest + ".part"
 	var done int64
 	req, err := http.NewRequest(http.MethodGet, url, nil)
@@ -253,7 +312,7 @@ func downloadFile(url, dest string, progress func(done, total int64)) error {
 		done = 0
 		flags |= os.O_TRUNC
 	default:
-		return fmt.Errorf("GET %s: %s", url, resp.Status)
+		return &httpStatusError{url: url, status: resp.Status, code: resp.StatusCode}
 	}
 	total := done + resp.ContentLength
 	if resp.ContentLength < 0 {
