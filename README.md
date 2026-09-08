@@ -11,10 +11,39 @@ proxima
 # Dashboard: http://localhost:60726
 ```
 
-No server running? On a fresh machine, `proxima` offers to set itself up: one
-y at the prompt downloads a small, chatty starter model (Qwen3.5 4B, ~3.6 GB)
-plus the llama.cpp runtime and drops you straight into chat. Headless runs
-never auto-download — the offer only appears on a controlling terminal.
+## Quick start: clone → phone → chatting
+
+On your computer (Go 1.25+):
+
+```
+git clone https://github.com/everydev1618/proxima-vega
+cd proxima-vega
+go build ./cmd/proxima
+./proxima
+```
+
+On a fresh machine `proxima` prints a pairing QR and offers the starter — a
+small, fast chat model (Qwen3.5 4B, ~3.6 GB). You can answer in the terminal,
+or let the phone drive:
+
+On your phone ([Expo Go](https://expo.dev/go), same WiFi — no app store build
+yet):
+
+```
+cd mobile && npm install && npx expo start
+```
+
+Open it in Expo Go and scan the pairing QR — `./proxima` shows it during
+first-run setup, `./proxima pair` any time after. Approve the download on the
+phone, watch the star form, and when it ignites you're chatting with Iris —
+every token generated on your own machine.
+
+Already have Ollama or LM Studio running? `./proxima` uses it directly — skip
+the download, run `./proxima pair`, and scan.
+
+Headless runs never auto-download — the setup offer appears on a controlling
+terminal or a paired phone, and nothing multi-gigabyte moves without a human
+saying yes.
 
 For everything past the starter, the managed runtime is driven explicitly:
 
@@ -52,13 +81,13 @@ detection, `-addr`, `-db`, `-mobile=off` to disable phone pairing.
 
 ## Phone
 
-`proxima pair` prints a pairing QR (a first run with nothing installed shows
-it on its own): scan it with the Proxima mobile app (`mobile/`, Expo/React
-Native) and the phone takes over — including the first-run model download,
-streamed chat with Iris, and tool approvals. The
-LAN listener (port 7769) is gated by a per-machine token
-(`~/.vega/mobile-token`); loopback stays open so the desktop dashboard is
-unchanged. See `mobile/README.md`.
+The mobile app (`mobile/`, Expo/React Native) drives the whole product:
+first-run model download, streamed chat with Iris, and tool approvals — when
+Iris wants to run a shell command, the prompt appears on the phone and the
+terminal, first answer wins. The LAN listener (port 7769) is gated by a
+per-machine token (`~/.vega/mobile-token`, delete it to force every phone to
+re-pair); loopback stays open so the desktop dashboard is unchanged. See
+`mobile/README.md`.
 
 proxima is a downstream product of [govega](https://github.com/everydev1618/govega)
 in the v39a-vega mold: the binary is wiring, the framework is upstream. See
