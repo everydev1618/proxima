@@ -7,9 +7,15 @@ the dashboard.
 
 ```
 proxima
-# proxima dev — ollama at http://127.0.0.1:11434, model qwen3:30b
-# Dashboard: http://localhost:60726
+# model ready — qwen3:30b, on this machine
+# agents up — tools, memory
+# approvals — exec, start_service, stop_service ask first, on this terminal or your phone
+# chat — http://localhost:7769  (opening in your browser)
 ```
+
+Boot ends in a chat tab: the dashboard opens itself as soon as the server
+answers. Agent internals stay out of the terminal — they log to
+`~/.vega/logs/proxima.log` (`-verbose` brings them back).
 
 ## Quick start: clone → phone → chatting
 
@@ -77,7 +83,9 @@ with crash restarts and idle VRAM reclamation.
 
 Flags: `-base-url` to point at a specific server (tailnet boxes count as
 local), `-model` to override the model, `-managed` to skip external-server
-detection, `-addr`, `-db`, `-mobile=off` to disable phone pairing.
+detection, `-approve` to widen or disable the tool gate (`exec` default,
+`all`, `off`), `-verbose` for agent internals on the terminal, `-addr`,
+`-db`, `-mobile=off` to disable phone pairing.
 
 ## Phone
 
