@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Proxima — an AI of your own</title>
+  <meta name="description" content="Proxima is a complete AI in one binary: your own agents, with tools and memory, and a dashboard to watch them work — running entirely on your machine. No account, no API keys, no subscription.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 8 L58 42 L92 50 L58 58 L50 92 L42 58 L8 50 L42 42 Z' fill='%238B2A1A'/%3E%3C/svg%3E">
+  <meta property="og:title" content="Proxima — an AI of your own">
+  <meta property="og:description" content="A complete AI in one binary, running entirely on your machine. No account, no API keys, no subscription.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://prxm.cx">
+  <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=switzer@400,500,600,700&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&display=swap">
+  <style>
+    :root {
+      --paper:       oklch(96.4% 0.012 60);
+      --paper-deep:  oklch(93.2% 0.018 55);
+      --rule:        oklch(85.5% 0.022 50);
+      --ink:         oklch(22% 0.018 40);
+      --ink-soft:    oklch(45% 0.020 45);
+      --ink-faint:   oklch(60% 0.018 45);
+      --brand:       oklch(40% 0.135 30);
+      --brand-deep:  oklch(32% 0.130 28);
+      --running:     oklch(48% 0.090 145);
+    }
+    html { scroll-behavior: smooth; background: var(--paper); }
+    html, body { margin: 0; padding: 0; max-width: 100vw; overflow-x: hidden; }
+    body {
+      font-family: 'Switzer', system-ui, -apple-system, sans-serif;
+      font-feature-settings: 'ss01', 'cv11';
+      color: var(--ink);
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+      background: var(--paper);
+    }
+    ::selection { background: var(--brand); color: var(--paper); }
+    a { color: inherit; text-decoration: none; }
+    a:hover { color: var(--brand-deep); }
+    code, pre, .mono { font-family: 'Geist Mono', ui-monospace, SFMono-Regular, monospace; }
+    hr.rule { border: 0; border-top: 1px solid var(--rule); margin: 0; }
+
+    .frame {
+      --gutter: clamp(1.25rem, 4vw, 3rem);
+      width: 100%;
+      max-width: 84rem;
+      margin: 0 auto;
+      padding-inline: var(--gutter);
+      box-sizing: border-box;
+    }
+    .section {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: clamp(2rem, 6vw, 4.5rem);
+      padding-block: clamp(3.5rem, 9vw, 7rem);
+    }
+    @media (min-width: 880px) {
+      .section { grid-template-columns: 12rem minmax(0, 1fr); }
+    }
+    .section-num {
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 0.78rem;
+      letter-spacing: 0.04em;
+      color: var(--brand);
+      font-weight: 500;
+      padding-top: 0.4rem;
+    }
+    .sidenote {
+      font-size: 0.78rem;
+      line-height: 1.5;
+      color: var(--ink-faint);
+      margin-top: 1.5rem;
+      padding-right: 1rem;
+    }
+    .display {
+      font-weight: 700;
+      letter-spacing: -0.025em;
+      line-height: 1.02;
+      color: var(--ink);
+      margin: 0;
+    }
+    .display-hero { font-size: clamp(2.6rem, 6.5vw, 5.2rem); }
+    .display-section { font-size: clamp(1.7rem, 3.5vw, 2.5rem); }
+    .lede {
+      font-size: clamp(1.02rem, 1.35vw, 1.16rem);
+      color: var(--ink-soft);
+      max-width: 60ch;
+      line-height: 1.6;
+      margin: 0;
+    }
+    .anno {
+      font-family: 'Geist Mono', ui-monospace, monospace;
+      font-size: 0.78rem;
+      letter-spacing: 0.04em;
+      color: var(--ink-faint);
+      margin: 0;
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-family: 'Geist Mono', monospace;
+      font-size: 0.72rem;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--ink-soft);
+      padding: 0.25rem 0.55rem;
+      border: 1px solid var(--rule);
+      border-radius: 2px;
+      background: var(--paper);
+    }
+    .chip-dot::before {
+      content: '';
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--running);
+      display: inline-block;
+    }
+    .action {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 0.5rem;
+      padding: 0.85rem 1.3rem;
+      background: var(--ink);
+      color: var(--paper);
+      font-weight: 600;
+      font-size: 0.92rem;
+      letter-spacing: -0.005em;
+      border: 0;
+      border-radius: 2px;
+      transition: background 220ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .action:hover { background: var(--brand-deep); color: var(--paper); }
+    .action::after {
+      content: '↗';
+      font-family: 'Geist Mono', monospace;
+      font-size: 0.85em;
+      transform: translateY(-0.05em);
+    }
+    .action-link {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 0.4rem;
+      color: var(--brand);
+      font-weight: 500;
+      border-bottom: 1px solid var(--brand);
+      padding-bottom: 1px;
+    }
+    .action-link:hover { color: var(--brand-deep); border-bottom-color: var(--brand-deep); }
+    .code {
+      font-family: 'Geist Mono', monospace;
+      font-size: 0.86rem;
+      line-height: 1.62;
+      background: var(--paper-deep);
+      color: var(--ink);
+      padding: 1.1rem 1.25rem;
+      border: 1px solid var(--rule);
+      border-radius: 2px;
+      overflow-x: auto;
+      max-width: 100%;
+      box-sizing: border-box;
+    }
+    .code p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .c-com { color: var(--ink-faint); }
+    .c-key { color: var(--brand); font-weight: 500; }
+    .c-str { color: var(--running); }
+    .c-tag { color: var(--brand-deep); }
+
+    .header-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 1.5rem;
+      padding-block: 1.1rem;
+      flex-wrap: wrap;
+    }
+    .wordmark { display: inline-flex; align-items: baseline; gap: 0.5rem; font-weight: 700; letter-spacing: -0.02em; font-size: 1.05rem; }
+    .wordmark-sep { color: var(--ink-faint); font-weight: 400; }
+    .wordmark-host { font-family: 'Geist Mono', monospace; font-size: 0.78rem; font-weight: 500; color: var(--ink-faint); letter-spacing: 0.02em; }
+    .header-nav { display: flex; gap: 1.4rem; font-size: 0.88rem; color: var(--ink-soft); flex-wrap: wrap; }
+    .header-nav a:hover { color: var(--brand-deep); }
+
+    .hero { padding-block: clamp(3.5rem, 9vw, 7.5rem); }
+    .hero-br { display: none; }
+    @media (min-width: 600px) { .hero-br { display: inline; } }
+    .hero-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: clamp(2.5rem, 5vw, 4.5rem);
+      align-items: center;
+    }
+    @media (min-width: 960px) {
+      .hero-grid { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
+    }
+    .hero-actions { display: flex; align-items: center; gap: 1.5rem; margin-top: 2.4rem; flex-wrap: wrap; }
+
+    .cmd-table { display: flex; flex-direction: column; gap: 0; margin-top: 2rem; border-top: 1px solid var(--rule); }
+    .cmd-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 0.35rem 2rem;
+      padding-block: 0.95rem;
+      border-bottom: 1px solid var(--rule);
+    }
+    @media (min-width: 720px) {
+      .cmd-row { grid-template-columns: 15rem minmax(0, 1fr); }
+    }
+    .cmd-name { font-family: 'Geist Mono', monospace; font-size: 0.86rem; font-weight: 500; color: var(--brand); }
+    .cmd-desc { font-size: 0.92rem; color: var(--ink-soft); }
+
+    .footer-grid {
+      display: flex;
+      justify-content: space-between;
+      gap: 1.5rem;
+      padding-block: 2.2rem;
+      flex-wrap: wrap;
+      font-size: 0.82rem;
+      color: var(--ink-faint);
+    }
+    .footer-grid a { color: var(--ink-soft); border-bottom: 1px solid var(--rule); }
+    .footer-grid a:hover { color: var(--brand-deep); border-bottom-color: var(--brand-deep); }
+  </style>
+</head>
+<body>
+
+  <header class="frame">
+    <div class="header-row">
+      <a href="#" class="wordmark">
+        <span>proxima</span>
+        <span class="wordmark-sep">·</span>
+        <span class="wordmark-host">prxm.cx</span>
+      </a>
+      <nav class="header-nav">
+        <a href="#runtime">runtime</a>
+        <a href="#physics">physics</a>
+        <a href="#pull">open pulls</a>
+        <a href="#phone">phone</a>
+        <a href="#firstrun">first run</a>
+        <a href="https://github.com/everydev1618/proxima-vega" target="_blank" rel="noreferrer">github ↗</a>
+      </nav>
+    </div>
+    <hr class="rule">
+  </header>
+
+  <section class="frame hero">
+    <div class="hero-grid">
+      <div>
+        <p class="anno">prxm.cx · a self-contained ai</p>
+        <h1 class="display display-hero" style="margin-top: 1.2rem;">
+          An AI of<br class="hero-br">your own.
+        </h1>
+        <p class="lede" style="margin-top: 1.6rem;">
+          Proxima is a complete AI in one binary: your own agents, with tools
+          and memory, and a dashboard to watch them work — the whole thing
+          running on your machine. Conversations never leave it. No account,
+          no API keys, no subscription.
+        </p>
+        <div class="hero-actions">
+          <a href="https://github.com/everydev1618/proxima-vega" target="_blank" rel="noreferrer" class="action">get proxima</a>
+          <a href="#firstrun" class="action-link">the one-keystroke first run</a>
+        </div>
+      </div>
+      <aside>
+        <div class="code" aria-label="Boot transcript">
+          <p><span class="c-com">$</span> proxima</p>
+          <p><span class="c-com">model ready — qwen3:30b, on this machine</span></p>
+          <p><span class="c-com">agents up — tools, memory</span></p>
+          <p><span class="c-com">dashboard:</span> <span class="c-str">http://localhost:60726</span></p>
+        </div>
+        <p class="anno" style="margin-top: 0.8rem;">α Cen C · 4.2465 ly · named for the nearest star</p>
+      </aside>
+    </div>
+  </section>
+
+  <div class="frame"><hr class="rule"></div>
+
+  <section class="frame section" id="runtime">
+    <div>
+      <div class="section-num">§1 &nbsp; runtime</div>
+      <p class="sidenote">
+        Under the hood, Proxima is built on
+        <a href="https://v3ga.dev" target="_blank" rel="noreferrer" style="border-bottom: 1px solid var(--rule);">vega</a>,
+        an Erlang-style supervised runtime for agents.
+      </p>
+    </div>
+    <div>
+      <h2 class="display display-section">The whole operation, in one binary.</h2>
+      <p class="lede" style="margin-top: 1.5rem;">
+        Every agent gets an inbox, a budget, tools, memory, and a supervisor
+        that restarts it when it fails — with the dashboard watching it all.
+        Already running Ollama, LM Studio, llama.cpp, or vLLM? Proxima finds
+        it and uses it; a box on your tailnet counts as local. Never heard of
+        those? You never need to — the first run (§5) sets everything up.
+      </p>
+      <div class="cmd-table">
+        <div class="cmd-row">
+          <span class="cmd-name">proxima models</span>
+          <span class="cmd-desc">the curated catalog, priced against this machine&#39;s memory</span>
+        </div>
+        <div class="cmd-row">
+          <span class="cmd-name">proxima pull</span>
+          <span class="cmd-desc">verified llama.cpp build + the recommended model</span>
+        </div>
+        <div class="cmd-row">
+          <span class="cmd-name">proxima -managed</span>
+          <span class="cmd-desc">boot the managed runtime — readiness proven by a real generation</span>
+        </div>
+        <div class="cmd-row">
+          <span class="cmd-name">proxima status</span>
+          <span class="cmd-desc">runtime, staged models, launch policies, smoke-eval verdicts</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="frame"><hr class="rule"></div>
+
+  <section class="frame section" id="physics">
+    <div>
+      <div class="section-num">§2 &nbsp; physics</div>
+      <p class="sidenote">
+        The managed runtime is a Go port of hermes-agent&#39;s local_runtime
+        (MIT, Nous Research). The measured constants are theirs; the
+        supervision is Proxima&#39;s.
+      </p>
+    </div>
+    <div>
+      <h2 class="display display-section">Budget math, not vibes.</h2>
+      <p class="lede" style="margin-top: 1.5rem;">
+        Before anything loads, Proxima reads the GGUF header, probes your
+        VRAM and RAM, and does the arithmetic. A model that won&#39;t fit is
+        refused — a physics refusal, stated plainly — instead of thrashing
+        your machine. Models that do fit get a context ladder (64K → 96K →
+        144K), per-model launch policies, a supervised llama-server with
+        crash restarts, and idle VRAM reclamation when you walk away.
+      </p>
+    </div>
+  </section>
+
+  <div class="frame"><hr class="rule"></div>
+
+  <section class="frame section" id="pull">
+    <div class="section-num">§3 &nbsp; open pulls</div>
+    <div>
+      <h2 class="display display-section">Any GGUF on Hugging Face.</h2>
+      <p class="lede" style="margin-top: 1.5rem;">
+        The curated catalog is the paved road, not a wall. Point at any of the
+        thousands of GGUF repos and Proxima streams just the header — a few
+        megabytes, never the weights — runs the same physics check, then
+        downloads. The first managed boot runs a tool-call smoke eval, and the
+        verdict is stamped per model: you know whether this model, at this
+        quant, on this hardware, can actually drive an agent.
+      </p>
+      <div class="code" style="margin-top: 2rem;">
+        <p><span class="c-com">$</span> proxima pull <span class="c-tag">hf:unsloth/Qwen3-8B-GGUF:Q4_K_M</span></p>
+      </div>
+    </div>
+  </section>
+
+  <div class="frame"><hr class="rule"></div>
+
+  <section class="frame section" id="phone">
+    <div>
+      <div class="section-num">§4 &nbsp; phone</div>
+      <p class="sidenote">
+        Pairing is gated by a per-machine token, and the phone talks straight
+        to your machine over your own network. The desktop dashboard stays on
+        loopback, untouched.
+      </p>
+    </div>
+    <div>
+      <h2 class="display display-section">In your pocket. Still on your machine.</h2>
+      <p class="lede" style="margin-top: 1.5rem;">
+        Scan one QR with the Proxima app and the phone takes over: chat with
+        your agents, watch a first-run download land, and answer tool
+        approvals from the couch. An agent doesn&#39;t run a command on your
+        machine until a human says yes — terminal or phone, whichever answers
+        first.
+      </p>
+      <div class="code" style="margin-top: 2rem;">
+        <p><span class="c-com">$</span> proxima pair</p>
+        <p><span class="c-com">scan with the Proxima app — same wifi, nothing leaves it</span></p>
+      </div>
+    </div>
+  </section>
+
+  <div class="frame"><hr class="rule"></div>
+
+  <section class="frame section" id="firstrun">
+    <div>
+      <div class="section-num">§5 &nbsp; first run</div>
+      <p class="sidenote">
+        Headless runs never auto-download. The offer only appears on a
+        controlling terminal, and nothing moves without a yes.
+      </p>
+    </div>
+    <div>
+      <h2 class="display display-section">A fresh machine is one keystroke away.</h2>
+      <p class="lede" style="margin-top: 1.5rem;">
+        No model server, nothing staged? Proxima offers to set itself up: one
+        y downloads a small, chatty starter model (Qwen3.5 4B, ~3.6 GB) plus
+        the llama.cpp runtime, and drops you straight into chat with your
+        agents.
+      </p>
+      <div class="hero-actions">
+        <div class="code" style="padding: 0.85rem 1.25rem;">
+          <p style="white-space: pre; overflow-wrap: normal;"><span class="c-com">$</span> go install <span class="c-tag">github.com/everydev1618/proxima-vega/cmd/proxima@latest</span></p>
+        </div>
+        <a href="https://github.com/everydev1618/proxima-vega" target="_blank" rel="noreferrer" class="action-link">source on github</a>
+      </div>
+    </div>
+  </section>
+
+  <div class="frame"><hr class="rule"></div>
+
+  <footer class="frame">
+    <div class="footer-grid">
+      <span>MIT · © 2026 everydev Inc</span>
+      <span>built on <a href="https://v3ga.dev" target="_blank" rel="noreferrer">vega</a> · localrt ports hermes-agent&#39;s local_runtime (MIT, <a href="https://github.com/NousResearch/hermes-agent" target="_blank" rel="noreferrer">Nous Research</a>)</span>
+      <span class="chip chip-dot">local only</span>
+    </div>
+  </footer>
+
+</body>
+</html>
