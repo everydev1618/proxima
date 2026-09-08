@@ -11,9 +11,9 @@ npx expo start
 ```
 
 Scan the Metro QR with Expo Go (iOS/Android) on a phone on the same network
-as the Mac running `proxima`. In the app, scan the *pairing* QR from the
-proxima terminal (or enter host/port/token manually — the terminal prints
-those too).
+as the Mac running `proxima`. In the app, scan the *pairing* QR — `proxima
+pair` prints it on demand, and a first run with nothing installed shows it on
+its own (or enter host/port/token manually — printed alongside the QR).
 
 ## How it talks to the Mac
 

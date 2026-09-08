@@ -52,9 +52,10 @@ detection, `-addr`, `-db`, `-mobile=off` to disable phone pairing.
 
 ## Phone
 
-`proxima` prints a pairing QR at startup: scan it with the Proxima mobile app
-(`mobile/`, Expo/React Native) and the phone takes over — including the
-first-run model download, streamed chat with Iris, and tool approvals. The
+`proxima pair` prints a pairing QR (a first run with nothing installed shows
+it on its own): scan it with the Proxima mobile app (`mobile/`, Expo/React
+Native) and the phone takes over — including the first-run model download,
+streamed chat with Iris, and tool approvals. The
 LAN listener (port 7769) is gated by a per-machine token
 (`~/.vega/mobile-token`); loopback stays open so the desktop dashboard is
 unchanged. See `mobile/README.md`.

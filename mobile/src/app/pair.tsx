@@ -75,8 +75,8 @@ export default function Pair() {
             <Eyebrow>The nearest star</Eyebrow>
             <H1 style={{ textAlign: 'center' }}>Proxima runs on your own machine</H1>
             <Body dim style={{ textAlign: 'center' }}>
-              In a terminal on your computer, run <Mono>proxima</Mono>. Then scan the QR code it
-              prints.
+              In a terminal on your computer, run <Mono>proxima pair</Mono> and scan the QR code.
+              (A first run of <Mono>proxima</Mono> shows it on its own.)
             </Body>
           </View>
 
