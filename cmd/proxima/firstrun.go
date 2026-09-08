@@ -13,7 +13,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/everydev1618/proxima-vega/localrt"
+	"github.com/everydev1618/proxima/localrt"
 )
 
 // bootstrapStarter offers to stage the starter model and returns its model

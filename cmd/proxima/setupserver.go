@@ -16,7 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/everydev1618/proxima-vega/localrt"
+	"github.com/everydev1618/proxima/localrt"
 )
 
 type setupPhase string

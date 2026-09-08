@@ -27,7 +27,7 @@ import (
 	"github.com/everydev1618/govega/dsl"
 	"github.com/everydev1618/govega/serve"
 
-	"github.com/everydev1618/proxima-vega/localrt"
+	"github.com/everydev1618/proxima/localrt"
 )
 
 var version = "dev"

@@ -16,8 +16,8 @@ proxima
 On your computer (Go 1.25+):
 
 ```
-git clone https://github.com/everydev1618/proxima-vega
-cd proxima-vega
+git clone https://github.com/everydev1618/proxima
+cd proxima
 go build ./cmd/proxima
 ./proxima
 ```

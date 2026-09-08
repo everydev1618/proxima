@@ -17,11 +17,11 @@ startup."* This repo is:
   (later) management
 
 Naming: **Proxima** — Proxima Centauri is the nearest star; this is the
-nearest possible Vega, running on your own hardware. The repo/module follows
-the tree convention as `proxima-vega`; the binary is `proxima`. Do NOT ship
-under "vega-lite" (taken by the visualization grammar at
-vega.github.io/vega-lite) or "altair" (its Python API) — both would be
-SEO/identity disasters.
+nearest possible Vega, running on your own hardware. Repo, module, and binary
+are all `proxima` (renamed from the tree-convention `proxima-vega` 2026-09-07;
+GitHub redirects the old name). Do NOT ship under "vega-lite" (taken by the
+visualization grammar at vega.github.io/vega-lite) or "altair" (its Python
+API) — both would be SEO/identity disasters.
 
 ## Why this is 80% done already
 

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/everydev1618/proxima-vega/localrt"
+	"github.com/everydev1618/proxima/localrt"
 )
 
 func starterFixture() (*localrt.CatalogEntry, localrt.QuantVariant) {
